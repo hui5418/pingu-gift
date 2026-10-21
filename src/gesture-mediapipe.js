@@ -24,15 +24,26 @@
     SWAP_HANDS: false,      // 如果左右手识别反了：改成 true
     INVERT_SWIPE: false,    // 如果右手滑动方向反了：改成 true
 
-    LEFT_MOVE_THRESHOLD: 0.045,  // 左手指尖位移阈值（归一化画面比例）
-    LEFT_WINDOW_MS: 180,         // 与多少毫秒前的指尖位置比较
-    LEFT_COOLDOWN_MS: 600,       // 左手防抖冷却
+    /* 防误识别：只有"像真手、并且确实在动"才触发 */
+    MIN_HAND_SCORE: 0.75,        // handedness 置信度
+    HAND_MIN_SPAN: 0.09,         // 手腕→中指根至少占画面 9%（太小=太远/误检）
+    HAND_MAX_SPAN: 0.85,
+    HAND_CONFIRM_FRAMES: 3,      // 连续 3 帧都检测到同一只手才算数
+    HAND_CENTER_MARGIN: 0.15,    // 手必须在画面中间区域（排除画面边缘拿手机的手）
 
-    RIGHT_SWIPE_X: 0.12,         // 右手横向滑动阈值
+    LEFT_MOVE_THRESHOLD: 0.09,   // 左手指尖 240ms 内位移超过画面 9%
+    LEFT_WINDOW_MS: 240,
+    LEFT_SHORT_MS: 80,           // 短窗口：确认此刻还在往同一方向动
+    LEFT_SHORT_MIN: 0.02,
+    LEFT_COOLDOWN_MS: 600,       // 左手防抖冷却（按要求 0.6s）
+
+    RIGHT_SWIPE_X: 0.16,         // 右手横向滑动阈值（画面宽度 16%）
     RIGHT_WINDOW_MS: 380,        // 滑动观察窗口
+    RIGHT_SHORT_MS: 90,
+    RIGHT_SHORT_MIN: 0.02,
     RIGHT_COOLDOWN_MS: 700,      // 右手切换冷却
 
-    HAND_SETTLE_MS: 350,         // 手刚进入画面先稳定，避免抬手误判
+    HAND_SETTLE_MS: 350,         // 手刚进入画面先稳定，避免抬手被误判
     SEND_INTERVAL_MS: 45,        // 送帧节流 ≈22fps
     MAX_NUM_HANDS: 2,
     SELFIE_MODE: true,
@@ -52,8 +63,8 @@
   var lastLeft = 0, lastRight = 0;
   var lastHint = 0;
   var tracks = {
-    Left:  { samples: [], visible: false, seenAt: 0, enterAt: 0 },
-    Right: { samples: [], visible: false, seenAt: 0, enterAt: 0 }
+    Left:  { samples: [], visible: false, seenAt: 0, enterAt: 0, frames: 0 },
+    Right: { samples: [], visible: false, seenAt: 0, enterAt: 0, frames: 0 }
   };
   var initWatchdog = 0;
   var startGuard = 0;
@@ -277,8 +288,8 @@
         hands.setOptions({
           maxNumHands: CFG.MAX_NUM_HANDS,
           modelComplexity: CFG.MODEL_COMPLEXITY,
-          minDetectionConfidence: 0.6,
-          minTrackingConfidence: 0.6,
+          minDetectionConfidence: 0.75,
+          minTrackingConfidence: 0.7,
           selfieMode: CFG.SELFIE_MODE
         });
         hands.onResults(onResults);
@@ -339,6 +350,7 @@
     st.samples.length = 0;
     st.visible = false;
     st.enterAt = 0;
+    st.frames = 0;
   }
 
   function stop() {
@@ -365,6 +377,27 @@
   }
 
   /* ---------------- 识别结果 ---------------- */
+  function d2(a, b) {
+    var dx = a.x - b.x, dy = a.y - b.y;
+    return Math.sqrt(dx * dx + dy * dy);
+  }
+
+  /* 是不是"真的有一只手举在画面中间"（过滤误检 / 画面边缘的手） */
+  function handOk(lm, hd) {
+    if (!hd || hd.score < CFG.MIN_HAND_SCORE) return false;
+    var span = d2(lm[0], lm[9]);              // 手腕 → 中指根
+    if (span < CFG.HAND_MIN_SPAN || span > CFG.HAND_MAX_SPAN) return false;
+    var cx = (lm[0].x + lm[5].x + lm[9].x + lm[13].x + lm[17].x) / 5;
+    var cy = (lm[0].y + lm[5].y + lm[9].y + lm[13].y + lm[17].y) / 5;
+    var m = CFG.HAND_CENTER_MARGIN;
+    if (cx < m || cx > 1 - m) return false;
+    if (cy < 0.12 || cy > 0.80) return false; // 太靠上/太靠下（比如拿手机的手）都不算
+    for (var i = 0; i < 21; i++) {
+      if (lm[i].x < -0.04 || lm[i].x > 1.04 || lm[i].y < -0.04 || lm[i].y > 1.04) return false;
+    }
+    return true;
+  }
+
   function onResults(res) {
     if (!res || !res.multiHandLandmarks) return;
     resultCount++;
@@ -380,7 +413,7 @@
       var lm = res.multiHandLandmarks[i];
       if (!lm || lm.length < 21) continue;
       var hd = res.multiHandedness && res.multiHandedness[i];
-      if (!hd || hd.score < 0.55) continue;
+      if (!handOk(lm, hd)) continue;           // 不像真手 → 直接忽略
       var label = hd.label;
       if (CFG.SWAP_HANDS) label = (label === "Left") ? "Right" : "Left";
       if (label === "Left") { seenLeft = true; trackLeft(lm, t); }
@@ -420,13 +453,20 @@
     var p = lm[TIP];
     pushSample(st, p.x, p.y, t);
     st.seenAt = t;
+    st.frames = (st.frames || 0) + 1;
     if (!st.visible) { st.visible = true; st.enterAt = t; return; }
+    if (st.frames < CFG.HAND_CONFIRM_FRAMES) return;
     if (t - st.enterAt < CFG.HAND_SETTLE_MS) return;
     if (t - lastLeft < CFG.LEFT_COOLDOWN_MS) return;
-    var ref = sampleNear(st, t - CFG.LEFT_WINDOW_MS, 140);
-    if (!ref) return;
+    var ref = sampleNear(st, t - CFG.LEFT_WINDOW_MS, 150);
+    var near = sampleNear(st, t - CFG.LEFT_SHORT_MS, 80);
+    if (!ref || !near) return;
     var dx = p.x - ref.x, dy = p.y - ref.y;
-    if (Math.sqrt(dx * dx + dy * dy) > CFG.LEFT_MOVE_THRESHOLD) {
+    var sx = p.x - near.x, sy = p.y - near.y;
+    var len = Math.sqrt(dx * dx + dy * dy);
+    var slen = Math.sqrt(sx * sx + sy * sy);
+    // 长窗口要够远、短窗口还在往同一方向动（排除关键点抖动造成的假动作）
+    if (len > CFG.LEFT_MOVE_THRESHOLD && slen > CFG.LEFT_SHORT_MIN && (dx * sx + dy * sy) > 0) {
       lastLeft = t;
       fireLeft();
     }
@@ -438,13 +478,18 @@
     var p = lm[TIP];
     pushSample(st, p.x, p.y, t);
     st.seenAt = t;
+    st.frames = (st.frames || 0) + 1;
     if (!st.visible) { st.visible = true; st.enterAt = t; return; }
+    if (st.frames < CFG.HAND_CONFIRM_FRAMES) return;
     if (t - st.enterAt < CFG.HAND_SETTLE_MS) return;
     if (t - lastRight < CFG.RIGHT_COOLDOWN_MS) return;
     var ref = sampleNear(st, t - CFG.RIGHT_WINDOW_MS, 200);
-    if (!ref) return;
+    var near = sampleNear(st, t - CFG.RIGHT_SHORT_MS, 90);
+    if (!ref || !near) return;
     var dx = p.x - ref.x, dy = p.y - ref.y;
-    if (Math.abs(dx) > CFG.RIGHT_SWIPE_X && Math.abs(dx) > Math.abs(dy) * 1.8) {
+    var sx = p.x - near.x;
+    if (Math.abs(dx) > CFG.RIGHT_SWIPE_X && Math.abs(dx) > Math.abs(dy) * 1.8
+        && Math.abs(sx) > CFG.RIGHT_SHORT_MIN && (sx * dx) > 0) {
       lastRight = t;
       fireRight(dx);
     }
@@ -494,6 +539,34 @@
     }, true);
   }
 
+  /* 构造一只"测试用"的手：21 个点按真实手型铺开，便于单元测试 */
+  function makeSyntheticHand(x, y) {
+    var lm = [];
+    for (var i = 0; i < 21; i++) lm.push({ x: x, y: y, z: 0 });
+    lm[0] = { x: x - 0.02, y: y + 0.14, z: 0 };                 // 手腕
+    lm[1] = { x: x - 0.10, y: y + 0.05, z: 0 };
+    lm[2] = { x: x - 0.12, y: y + 0.01, z: 0 };
+    lm[3] = { x: x - 0.13, y: y - 0.02, z: 0 };
+    lm[4] = { x: x - 0.14, y: y - 0.04, z: 0 };
+    lm[5] = { x: x - 0.06, y: y - 0.02, z: 0 };
+    lm[6] = { x: x - 0.07, y: y - 0.06, z: 0 };
+    lm[7] = { x: x - 0.07, y: y - 0.09, z: 0 };
+    lm[8] = { x: x - 0.07, y: y - 0.12, z: 0 };                 // 食指指尖
+    lm[9] = { x: x, y: y - 0.02, z: 0 };                        // 中指根
+    lm[10] = { x: x, y: y - 0.07, z: 0 };
+    lm[11] = { x: x, y: y - 0.10, z: 0 };
+    lm[12] = { x: x, y: y - 0.12, z: 0 };
+    lm[13] = { x: x + 0.05, y: y - 0.01, z: 0 };
+    lm[14] = { x: x + 0.06, y: y - 0.05, z: 0 };
+    lm[15] = { x: x + 0.06, y: y - 0.08, z: 0 };
+    lm[16] = { x: x + 0.06, y: y - 0.10, z: 0 };
+    lm[17] = { x: x + 0.10, y: y + 0.02, z: 0 };
+    lm[18] = { x: x + 0.12, y: y - 0.01, z: 0 };
+    lm[19] = { x: x + 0.13, y: y - 0.03, z: 0 };
+    lm[20] = { x: x + 0.13, y: y - 0.05, z: 0 };
+    return lm;
+  }
+
   window.GestureMediaPipe = {
     supported: supported,
     start: start,
@@ -506,14 +579,29 @@
         results: resultCount, protocol: location.protocol
       };
     },
-    // 仅测试用：直接喂一个归一化指尖坐标
+    // 仅测试用：喂一个归一化坐标（会完整走 handOk 防误识别检查）
     _testFeed: function (label, x, y) {
       var t = now();
       if (CFG.SWAP_HANDS) label = (label === "Left") ? "Right" : "Left";
+      var lm = makeSyntheticHand(x, y);
+      var hd = { score: 1, label: label };
+      if (!handOk(lm, hd)) return false;
+      if (label === "Left") trackLeft(lm, t);
+      else trackRight(lm, t);
+      return true;
+    },
+    // 仅测试用：构造"不像手"的输入（例如画面边缘、很小），应被拒绝
+    _testFeedRaw: function (label, x, y, span) {
+      var t = now();
       var lm = [];
       for (var i = 0; i < 21; i++) lm.push({ x: x, y: y, z: 0 });
-      if (label === "Left") { trackLeft(lm, t); }
-      else { trackRight(lm, t); }
+      lm[0] = { x: x, y: y };
+      lm[9] = { x: x, y: y - (span || 0.02) };
+      var hd = { score: 0.99, label: label };
+      if (!handOk(lm, hd)) return false;
+      if (label === "Left") trackLeft(lm, t);
+      else trackRight(lm, t);
+      return true;
     },
     _resetTest: function () {
       resetTrack(tracks.Left); resetTrack(tracks.Right);
