@@ -1,0 +1,1297 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="format-detection" content="telephone=no">
+<meta name="theme-color" content="#ffd9a0">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Ccircle cx='32' cy='32' r='30' fill='%23222631'/%3E%3Cellipse cx='32' cy='41' rx='16' ry='19' fill='%23fff3dc'/%3E%3Ccircle cx='24' cy='24' r='7' fill='%23fffdf8'/%3E%3Ccircle cx='40' cy='24' r='7' fill='%23fffdf8'/%3E%3Ccircle cx='24' cy='24' r='3' fill='%2314151c'/%3E%3Ccircle cx='40' cy='24' r='3' fill='%2314151c'/%3E%3Cpath d='M20 34 q12 -6 24 0 q-12 10 -24 0z' fill='%23ff9d2e'/%3E%3C/svg%3E">
+<title>Pingu 的小世界 · 给陈俊贤</title>
+<style>
+/* ============ 基础 ============ */
+:root{
+  --safe-t: env(safe-area-inset-top, 0px);
+  --safe-b: env(safe-area-inset-bottom, 0px);
+}
+*{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent;-webkit-touch-callout:none}
+[hidden]{display:none!important}
+html,body{height:100%}
+body{
+  font-family:-apple-system,BlinkMacSystemFont,"PingFang SC","Hiragino Sans GB","Microsoft YaHei","Noto Sans SC",system-ui,sans-serif;
+  overflow:hidden;touch-action:none;-webkit-user-select:none;user-select:none;
+  --bg1:#ffe9c7;--bg2:#ffc184;--ink:#3c2a19;--panel:rgba(255,255,255,.55);--line:rgba(255,255,255,.7);
+  --accent:#ff7a2f;
+  color:var(--ink);background:var(--bg1);
+}
+body[data-scene="study"]{--bg1:#eef4ff;--bg2:#c2d6ff;--ink:#25304a;--accent:#5b8def}
+body[data-scene="sleep"]{--bg1:#101a3a;--bg2:#2c3c76;--ink:#eef2ff;--panel:rgba(255,255,255,.13);--line:rgba(255,255,255,.22);--accent:#a8bcff}
+body[data-scene="play"]{--bg1:#eefaff;--bg2:#b9e8ff;--ink:#17394a;--accent:#17b3c9}
+body[data-scene="birthday"]{--bg1:#ffe8f3;--bg2:#ffb9d6;--ink:#4a1f37;--accent:#ff4f8b}
+
+#app{
+  position:fixed;left:0;right:0;top:0;height:100vh;height:100dvh;
+  display:flex;flex-direction:column;
+  background:linear-gradient(168deg,var(--bg1) 0%,var(--bg2) 100%);
+  transition:background .7s ease;
+}
+#app::before{
+  content:"";position:absolute;inset:0;pointer-events:none;
+  background:radial-gradient(circle at 50% 30%,rgba(255,255,255,.42),transparent 62%);
+  opacity:.9;transition:opacity .7s;
+}
+body[data-scene="sleep"] #app::before{opacity:.14}
+
+/* ============ 顶部 ============ */
+#topbar{
+  position:relative;z-index:6;display:flex;align-items:center;justify-content:space-between;
+  gap:8px;padding:calc(8px + var(--safe-t)) 14px 4px;
+}
+.brand{display:flex;align-items:center;gap:7px;font-weight:900;font-size:15px;letter-spacing:.3px;white-space:nowrap}
+.brand .peng{font-size:21px;line-height:1;animation:pengBob 3s ease-in-out infinite}
+.hstats{display:flex;align-items:center;gap:6px;min-width:0}
+.chip{
+  display:inline-flex;align-items:center;gap:4px;padding:7px 10px;border-radius:999px;
+  background:var(--panel);border:1px solid var(--line);backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px);
+  font-size:12px;font-weight:800;color:var(--ink);white-space:nowrap;font-family:inherit;
+  transition:transform .15s, background .3s;
+}
+button.chip{appearance:none;cursor:pointer}
+button.chip:active{transform:scale(.93)}
+#micBtn{font-size:14px;padding:7px 8px}
+#micBtn.listening{background:#ff5f7e;color:#fff;animation:pulse 1s infinite}
+
+/* ============ 舞台 ============ */
+#stageWrap{position:relative;z-index:4;flex:1;min-height:0;display:flex;align-items:center;justify-content:center;padding:0 6px}
+#stage{position:relative;width:min(92vw,460px);height:min(92vw,460px);max-height:100%;transition:opacity .2s ease,transform .2s ease}
+#stage.swap-out{opacity:0;transform:scale(.94)}
+#stage.swap-in{animation:swapIn .4s cubic-bezier(.2,1,.3,1)}
+@keyframes swapIn{from{opacity:0;transform:translateX(16px) scale(.96)}to{opacity:1;transform:none}}
+#bgArt,#frontArt{position:absolute;inset:0;width:100%;height:100%;display:block;pointer-events:none;overflow:hidden}
+#frontArt{z-index:3}
+#pinguWrap{position:absolute;left:50%;bottom:0;z-index:2;transform:translateX(-50%);pointer-events:none;will-change:transform}
+#pinguWrap img{display:none;width:auto;max-width:none;transform-origin:50% 100%;will-change:transform;filter:drop-shadow(0 12px 16px rgba(20,20,30,.22))}
+body[data-scene="sleep"] #pinguWrap img{filter:drop-shadow(0 10px 18px rgba(0,0,0,.4))}
+#pinguWrap img.on{display:block}
+#fx{position:absolute;inset:0;z-index:4;width:100%;height:100%;pointer-events:none}
+
+/* 对话气泡 */
+#bubble{
+  position:absolute;left:50%;top:1.5%;z-index:5;max-width:84%;
+  transform:translate(-50%,-26px);opacity:0;pointer-events:none;
+  background:rgba(255,255,255,.97);color:#3a2a1c;
+  padding:9px 16px;border-radius:18px;font-size:clamp(13px,3.7vw,17px);font-weight:800;
+  line-height:1.35;text-align:center;white-space:pre-line;
+  box-shadow:0 12px 26px rgba(70,45,20,.2);transition:opacity .3s ease,transform .5s cubic-bezier(.2,1.2,.4,1);
+}
+#bubble.show{opacity:1;transform:translate(-50%,0)}
+#bubble::after{content:"";position:absolute;left:50%;bottom:-6px;width:13px;height:13px;background:inherit;border-radius:3px;transform:translateX(-50%) rotate(45deg)}
+
+/* ============ 底部控制 ============ */
+#hud{
+  position:relative;z-index:6;display:flex;flex-direction:column;gap:6px;
+  padding:4px 14px calc(10px + var(--safe-b));
+}
+#hudRow{display:flex;align-items:center;gap:clamp(10px,3.5vw,18px)}
+#pad{
+  position:relative;flex:none;width:clamp(106px,29vw,146px);aspect-ratio:1/1;border-radius:50%;
+  background:radial-gradient(circle at 50% 42%,rgba(255,255,255,.62),rgba(255,255,255,.16) 70%);
+  border:1.5px solid var(--line);
+  box-shadow:0 10px 30px rgba(90,50,10,.14),inset 0 0 26px rgba(255,255,255,.4);
+  display:flex;align-items:center;justify-content:center;touch-action:none;overflow:hidden;
+  transition:transform .15s, box-shadow .25s, background .5s;
+}
+body[data-scene="sleep"] #pad{box-shadow:0 10px 30px rgba(0,0,0,.35),inset 0 0 26px rgba(255,255,255,.12)}
+#pad.pressing{transform:scale(.955);box-shadow:0 6px 20px rgba(255,120,30,.3),inset 0 0 34px rgba(255,180,90,.5)}
+.pad-ring{position:absolute;inset:13%;border-radius:50%;border:1.5px dashed rgba(255,255,255,.6);animation:spin 16s linear infinite;pointer-events:none}
+.pad-ring.r2{inset:26%;border-style:solid;border-color:rgba(255,255,255,.34);animation-direction:reverse;animation-duration:11s}
+.pad-center{position:relative;display:flex;flex-direction:column;align-items:center;gap:1px;pointer-events:none;text-align:center}
+.pad-icon{font-size:clamp(17px,4.6vw,22px);line-height:1;filter:drop-shadow(0 2px 3px rgba(0,0,0,.18))}
+.pad-label{font-size:clamp(9px,2.5vw,11px);font-weight:900;letter-spacing:.5px;opacity:.85;line-height:1.2;margin-top:2px}
+.pad-count{display:flex;gap:3px;margin-top:4px}
+.pad-count i{width:5px;height:5px;border-radius:50%;background:rgba(255,255,255,.55);transition:transform .12s,background .12s}
+.pad-count i.on{background:var(--accent);transform:scale(1.55)}
+.ripple{
+  position:absolute;width:34px;height:34px;margin:-17px 0 0 -17px;border-radius:50%;
+  background:radial-gradient(circle,rgba(255,255,255,.9),rgba(255,255,255,0) 70%);
+  pointer-events:none;animation:ripple .7s ease-out forwards;
+}
+@keyframes ripple{from{transform:scale(.3);opacity:.95}to{transform:scale(2.1);opacity:0}}
+@keyframes spin{to{transform:rotate(360deg)}}
+@keyframes pulse{0%,100%{box-shadow:0 0 0 0 rgba(255,95,126,.6)}50%{box-shadow:0 0 0 8px rgba(255,95,126,0)}}
+
+#info{flex:1;min-width:0;display:flex;flex-direction:column;gap:4px}
+#sceneName{font-size:clamp(17px,4.8vw,22px);font-weight:900;letter-spacing:.5px;line-height:1.15;transition:color .4s}
+#sceneTip{font-size:clamp(11px,3.1vw,13px);font-weight:700;line-height:1.4;opacity:.78}
+#swipeHint{font-size:clamp(10px,2.8vw,11.5px);font-weight:700;opacity:.5;margin-top:1px}
+
+#nav{display:flex;justify-content:center;gap:5px;padding:0 2px}
+#nav button{
+  appearance:none;border:1px solid var(--line);background:var(--panel);font-family:inherit;color:var(--ink);
+  flex:1;max-width:74px;display:flex;flex-direction:column;align-items:center;gap:1px;
+  padding:5px 2px 4px;border-radius:13px;cursor:pointer;transition:transform .16s,box-shadow .2s,background .3s;
+}
+#nav button .emo{font-size:17px;line-height:1.1}
+#nav button .lab{font-size:9.5px;font-weight:800;opacity:.62;letter-spacing:.3px;white-space:nowrap}
+#nav button.on{background:#fff;box-shadow:0 6px 16px rgba(80,50,20,.18);transform:translateY(-2px)}
+#nav button.on .lab{opacity:1;color:var(--accent)}
+#nav button:active{transform:scale(.94)}
+
+/* ============ 开场 ============ */
+#welcome{
+  position:fixed;inset:0;z-index:30;display:flex;align-items:center;justify-content:center;padding:20px;
+  background:radial-gradient(circle at 50% 32%,rgba(255,221,170,.9),rgba(255,150,80,.62));
+  backdrop-filter:blur(7px);-webkit-backdrop-filter:blur(7px);
+  transition:opacity .45s ease,visibility .45s;
+}
+#welcome.hide{opacity:0;visibility:hidden;pointer-events:none}
+.card{
+  width:min(92vw,372px);background:rgba(255,255,255,.95);border-radius:27px;padding:22px 20px 18px;
+  text-align:center;box-shadow:0 26px 70px rgba(120,55,0,.32);
+  animation:cardIn .5s cubic-bezier(.18,1.3,.4,1);
+}
+@keyframes cardIn{from{opacity:0;transform:translateY(24px) scale(.94)}to{opacity:1;transform:none}}
+.card .bigpeng{font-size:56px;line-height:1;filter:drop-shadow(0 10px 16px rgba(0,0,0,.2));animation:pengBob 2.6s ease-in-out infinite}
+.card h1{font-size:21px;margin:10px 0 6px;letter-spacing:.5px;color:#3a2a1c}
+.card .sub{font-size:13px;line-height:1.65;color:#7d6552;margin-bottom:14px}
+.card .sub b{color:#e2622b}
+#startBtn{
+  width:100%;border:0;border-radius:16px;padding:14px;font-size:16px;font-weight:900;color:#fff;font-family:inherit;
+  background:linear-gradient(135deg,#ff9a3d,#ff5f7e);box-shadow:0 12px 26px rgba(255,95,126,.42);cursor:pointer;
+  transition:transform .14s;
+}
+#startBtn:active{transform:scale(.97)}
+.hints{display:grid;gap:6px;margin-top:14px;font-size:11.5px;color:#8a7462;text-align:left;font-weight:700}
+.hints span{display:flex;gap:7px;align-items:center;background:#fff5e8;border-radius:11px;padding:7px 9px}
+.card .from{margin-top:12px;font-size:11px;font-weight:800;color:#bda48d;letter-spacing:.5px}
+
+/* ============ 提示 & 错误 ============ */
+#toast{
+  position:fixed;left:50%;bottom:27%;z-index:25;transform:translate(-50%,10px);
+  background:rgba(40,28,22,.9);color:#fff;font-size:13px;font-weight:800;padding:9px 16px;border-radius:999px;
+  opacity:0;pointer-events:none;transition:.25s;white-space:nowrap;
+}
+#toast.show{opacity:1;transform:translate(-50%,0)}
+#errbar{display:none;position:fixed;top:0;left:0;right:0;z-index:99;background:#e03131;color:#fff;font-size:11px;padding:4px 8px;white-space:pre-wrap}
+
+/* ============ 动画 ============ */
+@keyframes pengBob{0%,100%{transform:translateY(0) rotate(-2deg)}50%{transform:translateY(-6px) rotate(2deg)}}
+@keyframes flameFlick{from{transform:scale(1,1) translateY(0)}to{transform:scale(.82,1.2) translateY(-1.5px)}}
+@keyframes smokeUp{0%{opacity:.7;transform:translateY(0) scale(.7)}100%{opacity:0;transform:translateY(-42px) scale(1.4)}}
+@keyframes zzzFloat{0%{opacity:0;transform:translate(0,0) scale(.7)}25%{opacity:.95}100%{opacity:0;transform:translate(20px,-46px) scale(1.3)}}
+@keyframes twinkle{0%,100%{opacity:.3;transform:scale(.85)}50%{opacity:1;transform:scale(1.15)}}
+
+#frontArt #flames{transition:opacity .35s}
+#frontArt #flames.out{opacity:0}
+#frontArt #flames ellipse{transform-box:fill-box;transform-origin:center bottom;animation:flameFlick .85s ease-in-out infinite alternate}
+#frontArt #flames ellipse:nth-child(2n){animation-duration:1.05s}
+#frontArt #flames ellipse:nth-child(3n){animation-duration:.7s}
+#frontArt #smoke{opacity:0;transition:opacity .2s}
+#frontArt #smoke.show{opacity:1}
+#frontArt #smoke path{animation:smokeUp 1.9s ease-out forwards}
+#frontArt #zzz text{transform-box:fill-box;transform-origin:center;animation:zzzFloat 3s ease-out infinite;opacity:0}
+#frontArt #zzz text:nth-child(2){animation-delay:1s}
+#frontArt #zzz text:nth-child(3){animation-delay:2s}
+#bgArt .tw{transform-box:fill-box;transform-origin:center;animation:twinkle 3.2s ease-in-out infinite}
+#bgArt .tw:nth-child(2n){animation-delay:.7s}
+#bgArt .tw:nth-child(3n){animation-delay:1.5s}
+#frontArt #blanket.pat{animation:patBed .55s ease-in-out;transform-box:fill-box;transform-origin:center bottom}
+@keyframes patBed{0%,100%{transform:scaleY(1)}45%{transform:scaleY(.94)}}
+
+/* 横屏适配 */
+@media (orientation:landscape) and (max-height:520px){
+  #topbar{padding-top:calc(4px + var(--safe-t))}
+  .brand{font-size:13px}
+  #hud{flex-direction:row;align-items:center;padding-bottom:calc(6px + var(--safe-b))}
+  #hudRow{flex:1}
+  #pad{width:92px}
+  #info{gap:2px}
+  #sceneTip{display:none}
+  #nav{width:auto;flex:0 0 auto}
+  #nav button{max-width:56px}
+  #bubble{top:0;font-size:13px;padding:7px 12px}
+}
+@media (max-width:374px){
+  #topbar{padding-left:10px;padding-right:10px;gap:4px}
+  .brand{font-size:13px;gap:5px}
+  .brand .peng{font-size:18px}
+  .chip{font-size:11px;padding:6px 8px}
+  #micBtn{display:none!important}
+  .hstats{gap:4px}
+}
+@media (max-height:560px){
+  #welcome{padding:10px}
+  .card{padding:14px 16px 12px;max-height:96vh;overflow:auto}
+  .card .bigpeng{font-size:34px}
+  .card h1{font-size:17px;margin:6px 0 4px}
+  .card .sub{font-size:11.5px;margin-bottom:10px;line-height:1.5}
+  #startBtn{padding:11px;font-size:14px;border-radius:13px}
+  .hints{margin-top:8px;font-size:10px;gap:4px}
+  .hints span{padding:5px 7px}
+  .card .from{margin-top:8px}
+}
+@media (max-width:345px){
+  #nav button .lab{display:none}
+  #hud{padding-left:10px;padding-right:10px}
+}
+@media (prefers-reduced-motion:reduce){
+  *{animation-duration:.001s !important;animation-iteration-count:1 !important}
+}
+</style>
+</head>
+<body data-scene="eat">
+<div id="errbar"></div>
+
+<main id="app">
+  <header id="topbar">
+    <div class="brand"><span class="peng">🐧</span><span>Pingu 的小世界</span></div>
+    <div class="hstats">
+      <button id="greetBtn" class="chip" type="button">👋 打招呼</button>
+      <button id="micBtn" class="chip" type="button" hidden aria-label="用声音打招呼">🎤</button>
+      <div id="days" class="chip">🎂 -- 天</div>
+    </div>
+  </header>
+
+  <section id="stageWrap">
+    <div id="stage">
+      <svg id="bgArt" viewBox="0 0 400 460" preserveAspectRatio="xMidYMid meet" aria-hidden="true"></svg>
+
+      <div id="pinguWrap">
+        <img class="p" id="p0" src="__IMG_EAT__" alt="吃饭的 Pingu" draggable="false">
+        <img class="p" id="p1" src="__IMG_STUDY__" alt="上学的 Pingu" draggable="false">
+        <img class="p" id="p2" src="__IMG_SLEEP__" alt="穿睡衣的 Pingu" draggable="false">
+        <img class="p" id="p3" src="__IMG_PLAY__" alt="滑雪的 Pingu" draggable="false">
+        <img class="p" id="p4" src="__IMG_BIRTHDAY__" alt="戴皇冠的 Pingu" draggable="false">
+      </div>
+
+      <svg id="frontArt" viewBox="0 0 400 460" preserveAspectRatio="xMidYMid meet" aria-hidden="true"></svg>
+      <canvas id="fx"></canvas>
+      <div id="bubble"><span id="bubbleText"></span></div>
+    </div>
+  </section>
+
+  <footer id="hud">
+    <div id="hudRow">
+      <div id="pad" role="button" aria-label="左手控制区，点一下让 Pingu 做动作">
+        <span class="pad-ring"></span><span class="pad-ring r2"></span>
+        <div class="pad-center">
+          <span class="pad-icon">🖐️</span>
+          <span class="pad-label">左手点这里</span>
+          <span class="pad-count"><i></i><i></i><i></i><i></i><i></i></span>
+        </div>
+      </div>
+      <div id="info">
+        <h2 id="sceneName">吃饭</h2>
+        <p id="sceneTip">左手点一下，喂它吃小鱼</p>
+        <p id="swipeHint">左手做动作 · 右手滑动换一只</p>
+      </div>
+    </div>
+    <nav id="nav" aria-label="切换 Pingu"></nav>
+  </footer>
+</main>
+
+<div id="welcome">
+  <div class="card">
+    <div class="bigpeng">🐧</div>
+    <h1>有一份礼物在等你</h1>
+    <p class="sub">Pingu 想对 <b>陈俊贤</b> 说一句话…<br>抬起手，点一下它吧</p>
+    <button id="startBtn" type="button">点这里，叫醒 Pingu</button>
+    <div class="hints">
+      <span>🖐️ 左手点圆盘：Pingu 做专属动作</span>
+      <span>⇆ 右手左右滑动：换下一只 Pingu</span>
+      <span>👋 点「打招呼」：Pingu 回应你</span>
+    </div>
+    <p class="from" id="lunarLine">—</p>
+  </div>
+</div>
+<div id="toast"></div>
+
+<script>__LUNAR_JS__</script>
+<script>
+(function(){
+"use strict";
+
+/* ===================== 配置区 ===================== */
+var CONFIG = {
+  name: "陈俊贤",
+  age: 11,
+  lunarMonth: 9,
+  lunarDay: 28
+};
+
+/* ===================== 工具 ===================== */
+function $(s, r){ return (r || document).querySelector(s); }
+function $$(s, r){ return Array.prototype.slice.call((r || document).querySelectorAll(s)); }
+function clamp(v, a, b){ return v < a ? a : (v > b ? b : v); }
+function pick(a){ return a[(Math.random() * a.length) | 0]; }
+function now(){ return performance.now(); }
+var RAD = Math.PI / 180;
+
+/* ===================== 场景数据 ===================== */
+var SCENES = [
+  { id:"eat", emo:"🍚", name:"吃饭", tip:"左手点一下，喂它吃小鱼",
+    lines:["啊呜～真好吃！","再来一口！","吃饱啦，谢谢俊贤！"] },
+  { id:"study", emo:"📚", name:"上学", tip:"左手点一下：踏步 / 挥手",
+    lines:["我去上学啦！","今天也要好好学习！","俊贤也要加油哦"] },
+  { id:"sleep", emo:"😴", name:"睡觉", tip:"左手点一下，哄它睡觉",
+    lines:["呼…呼…","晚安，俊贤～","盖好被子，做个好梦"] },
+  { id:"play", emo:"⛷️", name:"滑雪", tip:"左手点一下：冲刺 / 蹦一下",
+    lines:["咻——","接住我！","和你一起玩最开心"] },
+  { id:"birthday", emo:"🎂", name:"生日", tip:"左手献花 / 转圈，点蛋糕吹蜡烛",
+    lines:["生日快乐，俊贤！","许个愿吧～","这是姐姐做的礼物哦"] }
+];
+
+/* 图片高度 / 底部位置（以 400×460 舞台坐标为单位） */
+var LAYOUT = {
+  eat:      { h:320, bottom:420, x:193 },
+  study:    { h:310, bottom:420, x:200 },
+  sleep:    { h:292, bottom:416, x:210 },
+  play:     { h:330, bottom:428, x:197 },
+  birthday: { h:280, bottom:398, x:224 }
+};
+
+/* A/B 两段动作：keys 为累计时间（秒）的关键帧，pose 为舞台坐标下的位移/旋转/缩放 */
+function P(o){ return Object.assign({x:0,y:0,r:0,sx:1,sy:1}, o); }
+var ACTIONS = {
+  eat: [
+    { dur:1.18, keys:[
+        {t:0, p:P({})},
+        {t:.35, p:P({y:16, r:-3, sx:1.02, sy:.97})},
+        {t:.5,  p:P({y:11, r:2, sx:1, sy:1})},
+        {t:.68, p:P({y:16, r:-2, sx:1.02, sy:.97})},
+        {t:.84, p:P({y:11, r:1.5})},
+        {t:1.18,p:P({y:14, r:0, sx:1, sy:.99})}
+      ], sounds:[[.04,'chew'],[.36,'chew'],[.7,'chew']], fx:[[.2,'fish'],[.5,'fish'],[.86,'fish']] },
+    { dur:1.05, keys:[
+        {t:0, p:P({})},
+        {t:.35, p:P({y:-12, r:6, sy:1.02})},
+        {t:.6, p:P({y:-7, r:3})},
+        {t:.8, p:P({y:-10, r:5})},
+        {t:1.05, p:P({y:-8, r:4})}
+      ], sounds:[[.18,'hum']], fx:[[.55,'heart']] }
+  ],
+  study: [
+    { dur:1.08, keys:[
+        {t:0, p:P({})},
+        {t:.27, p:P({y:-7, r:-2})},
+        {t:.54, p:P({y:0, r:2})},
+        {t:.81, p:P({y:-7, r:-2})},
+        {t:1.08, p:P({y:0, r:0})}
+      ], sounds:[[.04,'step'],[.31,'step'],[.58,'step'],[.85,'step']], fx:[] },
+    { dur:1.24, keys:[
+        {t:0, p:P({})},
+        {t:.31, p:P({r:-7, y:-4})},
+        {t:.62, p:P({r:7, y:-4})},
+        {t:.93, p:P({r:-5, y:-2})},
+        {t:1.24, p:P({r:0, y:0})}
+      ], sounds:[[.1,'hi']], fx:[[.4,'star']] }
+  ],
+  sleep: [
+    { dur:1.2, keys:[
+        {t:0, p:P({})},
+        {t:.35, p:P({y:-6, r:-6, sx:.99, sy:1.04})},
+        {t:.7, p:P({y:-3, r:-4, sx:1, sy:1.02})},
+        {t:1.2, p:P({y:0, r:0})}
+      ], sounds:[[.05,'yawn']], fx:[[.4,'zzz'],[.9,'zzz']] },
+    { dur:1.35, keys:[
+        {t:0, p:P({})},
+        {t:.4, p:P({y:10, r:-4, sx:1.01, sy:.96})},
+        {t:.75, p:P({y:8, r:2, sx:1, sy:.97})},
+        {t:1.05, p:P({y:10, r:-1})},
+        {t:1.35, p:P({y:9, r:0})}
+      ], sounds:[[.15,'snore'],[.8,'snore']], fx:[[.3,'zzz'],[.9,'zzz']] }
+  ],
+  play: [
+    { dur:1.15, keys:[
+        {t:0, p:P({})},
+        {t:.3, p:P({x:-18, r:-9, y:3})},
+        {t:.6, p:P({x:18, r:9, y:3})},
+        {t:.9, p:P({x:-14, r:-7, y:2})},
+        {t:1.15, p:P({x:0, r:0, y:0})}
+      ], sounds:[[.05,'whoosh']], fx:[[.15,'snow'],[.5,'snow'],[.82,'snow']] },
+    { dur:1.02, keys:[
+        {t:0, p:P({})},
+        {t:.22, p:P({y:8, sy:.92, sx:1.05})},
+        {t:.55, p:P({y:-46, sy:1.03, sx:.98})},
+        {t:.79, p:P({y:0, sy:.94, sx:1.04})},
+        {t:1.02, p:P({y:0, sy:1, sx:1})}
+      ], sounds:[[.2,'boing']], fx:[[.55,'snow'],[.8,'snow']] }
+  ],
+  birthday: [
+    { dur:1.12, keys:[
+        {t:0, p:P({})},
+        {t:.35, p:P({y:-5, r:-5, sx:1.04, sy:.99})},
+        {t:.7, p:P({y:-2, r:-3, sx:1.02, sy:1})},
+        {t:1.12, p:P({y:-4, r:-4, sx:1.03})}
+      ], sounds:[[.06,'chime']], fx:[[.35,'heart'],[.6,'heart'],[.85,'star']] },
+    { dur:1.25, keys:[
+        {t:0, p:P({})},
+        {t:.75, p:P({r:360, y:-14, sx:1.02})},
+        {t:1.0, p:P({r:360, y:0, sx:1})},
+        {t:1.25, p:P({r:360, y:0})}
+      ], sounds:[[.15,'giggle']], fx:[[.4,'star'],[.8,'sparkle']] }
+  ]
+};
+var GREET_ACTION = { dur:1.7, keys:[
+  {t:0, p:P({})},
+  {t:.3, p:P({y:-14, sy:1.02})},
+  {t:.6, p:P({y:0})},
+  {t:.95, p:P({y:-9})},
+  {t:1.25, p:P({y:0})},
+  {t:1.7, p:P({y:0})}
+], sounds:[[.05,'pop'],[.55,'pop']], fx:[[.3,'heart'],[.8,'heart']] };
+
+/* ===================== 元素 ===================== */
+var body = document.body;
+var stage = $("#stage");
+var stageWrap = $("#stageWrap");
+var bgArt = $("#bgArt"), frontArt = $("#frontArt");
+var pinguWrap = $("#pinguWrap");
+var imgs = $$("#pinguWrap img");
+var bubble = $("#bubble"), bubbleText = $("#bubbleText");
+var pad = $("#pad");
+var nav = $("#nav");
+var sceneName = $("#sceneName"), sceneTip = $("#sceneTip");
+var daysEl = $("#days");
+var toast = $("#toast");
+var errbar = $("#errbar");
+var fx = $("#fx");
+var ctx = fx.getContext("2d");
+var metaTheme = document.querySelector('meta[name="theme-color"]');
+var THEME = { eat:"#ffd9a0", study:"#dbe7ff", sleep:"#16224a", play:"#cdf0ff", birthday:"#ffd0e2" };
+
+/* ===================== 状态 ===================== */
+var S = {
+  scene: 0,
+  phase: -1,          // -1 未触发；0=A；1=B
+  pose: {x:0,y:0,r:0,sx:1,sy:1},
+  anim: null,
+  transitioning: false,
+  unlocked: false,
+  blow: {},
+  size: {w:400,h:460,unit:1},
+  t: 0
+};
+var lastSay = 0;
+var fxList = [];
+var timers = [];
+
+/* ===================== 音效（Web Audio 合成，无音频文件） ===================== */
+var AC = null;
+function ac(){
+  if (!AC) {
+    var C = window.AudioContext || window.webkitAudioContext;
+    if (!C) return null;
+    try { AC = new C(); } catch (e) { return null; }
+  }
+  if (AC.state === "suspended") AC.resume();
+  return AC;
+}
+function tone(freq, dur, type, vol, when, freq2){
+  var a = ac(); if (!a) return;
+  var t0 = a.currentTime + (when || 0);
+  var o = a.createOscillator(), g = a.createGain();
+  o.type = type || "sine";
+  o.frequency.setValueAtTime(freq, t0);
+  if (freq2) o.frequency.exponentialRampToValueAtTime(Math.max(30, freq2), t0 + dur);
+  g.gain.setValueAtTime(.0001, t0);
+  g.gain.linearRampToValueAtTime(vol == null ? .08 : vol, t0 + .015);
+  g.gain.exponentialRampToValueAtTime(.0001, t0 + dur);
+  o.connect(g); g.connect(a.destination);
+  o.start(t0); o.stop(t0 + dur + .03);
+}
+function noise(dur, vol, when, filter, f1, f2){
+  var a = ac(); if (!a) return;
+  dur = dur || .15; vol = vol == null ? .06 : vol;
+  var t0 = a.currentTime + (when || 0);
+  var buf = a.createBuffer(1, Math.ceil(a.sampleRate * dur), a.sampleRate);
+  var d = buf.getChannelData(0);
+  for (var i = 0; i < d.length; i++) d[i] = (Math.random() * 2 - 1) * (1 - i / d.length);
+  var src = a.createBufferSource(); src.buffer = buf;
+  var g = a.createGain(); g.gain.value = vol;
+  var bq = a.createBiquadFilter(); bq.type = filter || "lowpass";
+  bq.frequency.setValueAtTime(f1 || 1200, t0);
+  if (f2) bq.frequency.exponentialRampToValueAtTime(Math.max(80, f2), t0 + dur);
+  src.connect(bq); bq.connect(g); g.connect(a.destination);
+  src.start(t0);
+}
+var SND = {
+  ding: function(){ tone(1318.5, .5, "sine", .07); tone(1975.5, .4, "sine", .04, .02); tone(2637, .22, "sine", .015, .04); },
+  pop: function(){ tone(760, .08, "sine", .07, 0, 1180); },
+  chew: function(t){ t = t || 0; for (var i = 0; i < 2; i++){ noise(.05, .05, t + i * .09, "lowpass", 800); tone(110, .05, "square", .02, t + i * .09); } },
+  hum: function(){ tone(210, .5, "sine", .05, 0, 148); tone(315, .45, "sine", .02, .04, 220); },
+  step: function(){ for (var i = 0; i < 2; i++){ tone(210 + i * 30, .045, "triangle", .045, i * .07); noise(.03, .025, i * .07, "highpass", 1600); } },
+  hi: function(){ tone(784, .12, "sine", .07); tone(1047, .16, "sine", .05, .1); },
+  yawn: function(){ tone(520, .65, "sine", .05, 0, 165); noise(.6, .025, .05, "bandpass", 800, 320); },
+  snore: function(){ tone(92, .8, "sawtooth", .025); tone(104, .7, "sine", .02, .1); },
+  whoosh: function(){ noise(.5, .06, 0, "bandpass", 350, 1900); },
+  boing: function(){ tone(190, .26, "triangle", .08, 0, 760); tone(760, .12, "sine", .03, .22); },
+  chime: function(){ tone(1047, .7, "sine", .045); tone(2093, .45, "sine", .02); tone(1568, .55, "sine", .025, .03); },
+  giggle: function(){ tone(880, .07, "sine", .05); tone(1046, .07, "sine", .05, .1); tone(932, .09, "sine", .04, .2); },
+  note: function(n){
+    var f = [523, 587, 659, 784, 880][clamp((n || 1) - 1, 0, 4)];
+    tone(f, .16, "sine", .055);
+  },
+  birthdayBell: function(){ [523, 659, 784, 1047].forEach(function(f, i){ tone(f, .5, "sine", .05, i * .14); tone(f * 2, .3, "sine", .015, i * .14); }); },
+  melody: function(){
+    var seq = [[392,.3],[392,.26],[440,.3],[392,.3],[523,.3],[494,.6],
+               [392,.3],[392,.26],[440,.3],[392,.3],[587,.3],[523,.6],
+               [392,.3],[392,.26],[784,.3],[659,.3],[523,.3],[494,.3],[440,.62],
+               [698,.3],[698,.26],[659,.3],[523,.3],[587,.3],[523,.72]];
+    var t = 0;
+    seq.forEach(function(n){ tone(n[0], n[1], "triangle", .06, t); t += n[1] * .94; });
+  }
+};
+function sfx(name, delay){ try { if (SND[name]) SND[name](delay || 0); } catch (e) {} }
+
+/* ===================== 语音 ===================== */
+var voices = [];
+function loadVoices(){ if ("speechSynthesis" in window) voices = window.speechSynthesis.getVoices() || []; }
+if ("speechSynthesis" in window) { loadVoices(); window.speechSynthesis.onvoiceschanged = loadVoices; }
+function speak(text){
+  if (!("speechSynthesis" in window)) return false;
+  try {
+    var u = new SpeechSynthesisUtterance(text);
+    u.lang = "zh-CN"; u.rate = .97; u.pitch = 1.3;
+    var v = voices.filter(function(x){ return /zh[-_]CN|Chinese|普通话|中文/i.test((x.lang || "") + " " + (x.name || "")); })[0]
+         || voices.filter(function(x){ return /^zh/i.test(x.lang || ""); })[0];
+    if (v) u.voice = v;
+    window.speechSynthesis.cancel();
+    window.speechSynthesis.speak(u);
+    return true;
+  } catch (e) { return false; }
+}
+
+/* ===================== UI ===================== */
+function say(text, force, ms){
+  var t = now();
+  if (!force && t - lastSay < 1200) return;
+  lastSay = t;
+  bubbleText.textContent = text;
+  bubble.classList.add("show");
+  sfx("pop");
+  clearTimeout(say._t);
+  say._t = setTimeout(function(){ bubble.classList.remove("show"); }, ms || 3600);
+}
+function showToast(text){
+  toast.textContent = text;
+  toast.classList.add("show");
+  clearTimeout(showToast._t);
+  showToast._t = setTimeout(function(){ toast.classList.remove("show"); }, 2000);
+}
+function vibrate(v){ try { if (navigator.vibrate) navigator.vibrate(v || 8); } catch (e) {} }
+
+/* ===================== 舞台尺寸 ===================== */
+function fitStage(){
+  var wrapW = stageWrap.clientWidth - 12;
+  var wrapH = stageWrap.clientHeight;
+  var w = Math.min(wrapW, 480, wrapH / 1.15);
+  var h = w * 1.15;
+  stage.style.width = w + "px";
+  stage.style.height = h + "px";
+  var dpr = Math.min(window.devicePixelRatio || 1, 2.5);
+  fx.width = Math.round(w * dpr);
+  fx.height = Math.round(h * dpr);
+  var scale = w / 400;
+  ctx.setTransform(scale * dpr, 0, 0, scale * dpr, 0, 0);
+  S.size = { w: w, h: h, unit: h / 460 };
+  layoutPingu();
+  invalidatePose();
+}
+function layoutPingu(){
+  var L = LAYOUT[SCENES[S.scene].id];
+  var unit = S.size.unit || 1;
+  var img = imgs[S.scene];
+  img.style.height = (L.h * unit) + "px";
+  pinguWrap.style.bottom = ((460 - L.bottom) * unit) + "px";
+  pinguWrap.style.marginLeft = ((L.x - 200) * unit) + "px";
+}
+
+/* ===================== 特效画布 ===================== */
+function fxEmit(type, x, y, n, opt){
+  opt = opt || {};
+  for (var i = 0; i < n; i++){
+    var a = Math.random() * Math.PI * 2;
+    var v = (opt.spread == null ? 90 : opt.spread) * (.4 + Math.random() * .9);
+    fxList.push({
+      type: type,
+      x: x, y: y,
+      vx: Math.cos(a) * v, vy: Math.sin(a) * v - (opt.up || 0),
+      g: opt.g == null ? 160 : opt.g,
+      life: 0, max: opt.life || (1 + Math.random() * .8),
+      size: opt.size || (3 + Math.random() * 5),
+      rot: Math.random() * 6.28, vr: (Math.random() - .5) * 7,
+      color: opt.color || pick(["#ff6b8b", "#ffd166", "#7bdff2", "#ff9f43", "#a0e7a0", "#c9a7ff"])
+    });
+  }
+  if (fxList.length > 240) fxList.splice(0, fxList.length - 240);
+}
+function heartPath(s){
+  ctx.beginPath();
+  ctx.moveTo(0, s * .35);
+  ctx.bezierCurveTo(-s * .9, -s * .25, -s * .45, -s * .95, 0, s * .45);
+  ctx.bezierCurveTo(s * .45, -s * .95, s * .9, -s * .25, 0, s * .35);
+  ctx.closePath();
+}
+function drawFX(dt){
+  ctx.clearRect(0, 0, 400, 460);
+  for (var i = fxList.length - 1; i >= 0; i--){
+    var p = fxList[i];
+    p.life += dt;
+    if (p.life > p.max){ fxList.splice(i, 1); continue; }
+    p.vy += p.g * dt;
+    p.x += p.vx * dt; p.y += p.vy * dt; p.rot += p.vr * dt;
+    var k = 1 - p.life / p.max;
+    ctx.save();
+    ctx.globalAlpha = Math.min(1, k * 1.9);
+    ctx.translate(p.x, p.y);
+    ctx.rotate(p.rot);
+    if (p.type === "heart"){ ctx.fillStyle = p.color; heartPath(p.size); ctx.fill(); }
+    else if (p.type === "confetti"){ ctx.fillStyle = p.color; ctx.fillRect(-p.size * .5, -p.size * .28, p.size, p.size * .56); }
+    else if (p.type === "star" || p.type === "sparkle"){
+      ctx.fillStyle = p.type === "sparkle" ? "#fff6c9" : p.color;
+      var r = p.size * (p.type === "sparkle" ? 1.3 : .9);
+      ctx.beginPath();
+      for (var j = 0; j < 8; j++){
+        var ang = j * Math.PI / 4, rr = j % 2 ? r * .36 : r;
+        var px = Math.cos(ang) * rr, py = Math.sin(ang) * rr;
+        j ? ctx.lineTo(px, py) : ctx.moveTo(px, py);
+      }
+      ctx.closePath(); ctx.fill();
+    }
+    else if (p.type === "snow"){ ctx.fillStyle = "#fff"; ctx.beginPath(); ctx.arc(0, 0, p.size * .55, 0, 6.283); ctx.fill(); }
+    else if (p.type === "fish"){
+      ctx.fillStyle = "#ff8a3d";
+      ctx.beginPath(); ctx.ellipse(0, 0, p.size * 1.15, p.size * .62, 0, 0, 6.283); ctx.fill();
+      ctx.beginPath(); ctx.moveTo(-p.size * 1.1, 0); ctx.lineTo(-p.size * 1.9, -p.size * .7); ctx.lineTo(-p.size * 1.9, p.size * .7); ctx.closePath(); ctx.fill();
+    }
+    else if (p.type === "cake"){
+      ctx.font = (p.size * 4.6).toFixed(1) + "px serif";
+      ctx.textAlign = "center"; ctx.textBaseline = "middle";
+      ctx.fillText("🎂", 0, 0);
+    }
+    else if (p.type === "zzz"){
+      ctx.fillStyle = "rgba(223,232,255,.95)";
+      ctx.font = "900 " + (p.size * 3.4).toFixed(1) + "px system-ui,sans-serif";
+      ctx.textAlign = "center"; ctx.textBaseline = "middle";
+      ctx.fillText("z", 0, 0);
+    }
+    else { ctx.fillStyle = p.color; ctx.beginPath(); ctx.arc(0, 0, p.size * .7, 0, 6.283); ctx.fill(); }
+    ctx.restore();
+  }
+}
+function sceneFx(kind){
+  var id = SCENES[S.scene].id;
+  if (kind === "fish") fxEmit("fish", 200 + (Math.random() - .5) * 40, 420, 2, { spread: 30, speed: .8, up: 150, g: 260, life: .9, size: 4 });
+  else if (kind === "heart") fxEmit("heart", 200 + (Math.random() - .5) * 120, 250, 4, { spread: 40, speed: .7, up: 70, g: 20, life: 1.3, size: 5 });
+  else if (kind === "star") fxEmit("star", 200 + (Math.random() - .5) * 140, 220, 5, { spread: 80, speed: .9, up: 60, g: 30, life: 1.2 });
+  else if (kind === "sparkle") fxEmit("sparkle", 200 + (Math.random() - .5) * 160, 220, 7, { spread: 110, speed: 1, up: 50, g: 20, life: 1.4 });
+  else if (kind === "snow") fxEmit("snow", 200 + (Math.random() - .5) * 120, 400, 8, { spread: 90, speed: 1.2, up: 130, g: 220, life: 1.1, size: 4 });
+  else if (kind === "zzz") fxEmit("zzz", 292, 250, 2, { spread: 14, speed: .4, up: 40, g: -6, life: 2.2, size: 4 });
+}
+function cakeRain(){
+  for (var i = 0; i < 26; i++){
+    fxEmit("cake", 30 + Math.random() * 340, -20 - Math.random() * 120, 1, { spread: 0, up: 0, g: 90, life: 3, size: 4 });
+  }
+  fxEmit("confetti", 200, 160, 80, { spread: 260, speed: 1.5, up: 120, g: 210, life: 2.4, size: 6 });
+}
+
+/* ===================== 场景背景 / 前景绘制 ===================== */
+function bunting(){
+  var out = "", colors = ["#ff8fab", "#ffd166", "#8ecae6", "#a0e7a0", "#ffb4a2"];
+  for (var i = 0; i < 13; i++){
+    var x = 10 + i * 31;
+    var y = 34 + Math.sin(i / 12 * Math.PI) * 22;
+    out += '<path d="M' + x + ' ' + y + ' l15 2 l-8 19 z" fill="' + colors[i % 5] + '" opacity=".95"/>';
+  }
+  return out;
+}
+function candles(){
+  var out = "";
+  for (var i = 0; i < 11; i++){
+    var x = 156 + i * 8.6;
+    var c = ["#ff8fab", "#8ecae6", "#ffd166", "#a0e7a0"][i % 4];
+    out += '<rect x="' + x + '" y="295" width="4.4" height="19" rx="2" fill="' + c + '"/>';
+    out += '<rect x="' + (x - .8) + '" y="292" width="6" height="4" rx="1.5" fill="#fff" opacity=".7"/>';
+  }
+  return out;
+}
+function flames(){
+  var out = "";
+  for (var i = 0; i < 11; i++){
+    var x = 156 + i * 8.6;
+    out += '<ellipse cx="' + (x + 2.2) + '" cy="287" rx="3.1" ry="5.6" fill="#ffcf4d"/>';
+    out += '<ellipse cx="' + (x + 2.2) + '" cy="289" rx="1.5" ry="2.8" fill="#fff3b0"/>';
+  }
+  return out;
+}
+
+function shadowSVG(cx, cy, rx){
+  return '<ellipse cx="' + cx + '" cy="' + cy + '" rx="' + rx + '" ry="' + Math.round(rx * .16) + '" fill="#000" opacity=".15"/>';
+}
+
+function bgHTML(id){
+  if (id === "eat"){
+    return ''
+    + '<ellipse cx="200" cy="446" rx="172" ry="20" fill="#efc79b" opacity=".38"/>'
+    + '<g stroke="#ffca7a" stroke-width="1.6" fill="none" opacity=".9"><path d="M44 24 Q200 50 356 22"/></g>'
+    + '<g fill="#ffd166"><circle cx="84" cy="31" r="3.4"/><circle cx="142" cy="37" r="3.4"/><circle cx="200" cy="39" r="3.4"/>'
+    + '<circle cx="258" cy="37" r="3.4"/><circle cx="316" cy="30" r="3.4"/></g>'
+    + '<g><rect x="268" y="44" width="96" height="82" rx="12" fill="#cfeaff" stroke="#fff" stroke-width="6"/>'
+    + '<path d="M268 85h96M316 44v82" stroke="#fff" stroke-width="5"/>'
+    + '<circle cx="298" cy="65" r="10" fill="#ffe08a"/></g>'
+    + '<rect x="14" y="158" width="108" height="8" rx="4" fill="#c98a52"/>'
+    + '<g fill="#ff9a4d"><path d="M28 146q9-9 20 0-11 9-20 0z"/><path d="M58 146q9-9 20 0-11 9-20 0z"/></g>'
+    + '<circle cx="33" cy="144" r="1.6" fill="#3a2a1a"/><circle cx="63" cy="144" r="1.6" fill="#3a2a1a"/>';
+  }
+  if (id === "study"){
+    return ''
+    + '<g stroke="#a9c6ff" stroke-width="1.6" fill="none" opacity=".9"><path d="M52 24 Q200 46 348 22"/></g>'
+    + '<g fill="#8ecae6"><path d="M90 26 l12 3 l-6 14 z"/><path d="M172 30 l12 2 l-6 14 z"/><path d="M254 28 l12 2 l-6 14 z"/></g>'
+    + '<g fill="#ffd166"><path d="M130 28 l12 2 l-6 14 z"/><path d="M212 30 l12 2 l-6 14 z"/><path d="M294 26 l12 3 l-6 14 z"/></g>'
+    + '<rect x="0" y="412" width="400" height="48" fill="#dfe8fb" opacity=".5"/>'
+    + '<rect x="16" y="138" width="122" height="10" rx="5" fill="#c7a27a"/>'
+    + '<rect x="16" y="220" width="122" height="10" rx="5" fill="#c7a27a"/>'
+    + '<g><rect x="24" y="108" width="11" height="30" rx="2" fill="#ff8fab"/>'
+    + '<rect x="38" y="112" width="11" height="26" rx="2" fill="#8ecae6"/>'
+    + '<rect x="52" y="104" width="11" height="34" rx="2" fill="#ffd166"/>'
+    + '<rect x="66" y="110" width="11" height="28" rx="2" fill="#a0e7a0"/>'
+    + '<rect x="24" y="190" width="11" height="30" rx="2" fill="#c9a7ff"/>'
+    + '<rect x="38" y="194" width="11" height="26" rx="2" fill="#ff9f43"/>'
+    + '<rect x="52" y="188" width="11" height="32" rx="2" fill="#8ecae6"/></g>'
+    + '<circle cx="332" cy="104" r="27" fill="#fffdf5" stroke="#ffcf6b" stroke-width="5"/>'
+    + '<path d="M332 104 v-13 M332 104 l9 6" stroke="#b98a4a" stroke-width="3" stroke-linecap="round"/>'
+    + '<rect x="292" y="176" width="80" height="92" rx="7" fill="#fff" opacity=".82"/>'
+    + '<text x="332" y="212" text-anchor="middle" font-size="15" font-weight="900" fill="#5b8def">A B C</text>'
+    + '<text x="332" y="238" text-anchor="middle" font-size="15" font-weight="900" fill="#8ecae6">1 2 3</text>';
+  }
+  if (id === "sleep"){
+    return ''
+    + '<g><circle cx="318" cy="72" r="30" fill="#fdf3c8"/>'
+    + '<circle cx="306" cy="65" r="6" fill="#e7d9a0" opacity=".65"/><circle cx="330" cy="84" r="4" fill="#e7d9a0" opacity=".65"/>'
+    + '<circle cx="326" cy="59" r="3" fill="#e7d9a0" opacity=".65"/></g>'
+    + '<g fill="#fff" opacity=".75"><circle cx="70" cy="58" r="2.2"/><circle cx="112" cy="96" r="1.6"/>'
+    + '<circle cx="188" cy="46" r="2"/><circle cx="252" cy="84" r="1.5"/><circle cx="366" cy="130" r="2.2"/>'
+    + '<circle cx="44" cy="144" r="1.8"/><circle cx="150" cy="116" r="1.4"/><circle cx="272" cy="38" r="1.6"/></g>'
+    + '<g class="tw" fill="#dfe8ff"><path d="M238 50 l2.6 7 7 2.6 -7 2.6 -2.6 7 -2.6 -7 -7 -2.6 7 -2.6 z"/></g>'
+    + '<g class="tw" fill="#c8d6ff"><path d="M86 162 l2 5.4 5.4 2 -5.4 2 -2 5.4 -2 -5.4 -5.4 -2 5.4 -2 z"/></g>'
+    + '<rect x="14" y="150" width="372" height="284" rx="30" fill="#38448a"/>'
+    + '<rect x="32" y="166" width="336" height="252" rx="20" fill="#45539b"/>'
+    + '<path d="M116 166v252M200 166v252M284 166v252" stroke="#38448a" stroke-width="3" opacity=".55"/>'
+    + '<rect x="108" y="248" width="184" height="104" rx="44" fill="#fff7e9"/>'
+    + '<path d="M150 262 q50 -14 100 0" stroke="#efe1c9" stroke-width="3" fill="none"/>';
+  }
+  if (id === "play"){
+    return ''
+    + '<circle cx="318" cy="86" r="30" fill="#ffd166"/><circle cx="318" cy="86" r="44" fill="#ffd166" opacity=".2"/>'
+    + '<g fill="#fff" opacity=".92"><ellipse class="cloud" cx="84" cy="96" rx="34" ry="17"/>'
+    + '<ellipse cx="112" cy="88" rx="23" ry="13"/><ellipse cx="56" cy="104" rx="21" ry="11"/></g>'
+    + '<path d="M0 292 L74 168 L148 258 L222 158 L300 254 L400 176 L400 460 L0 460 Z" fill="#d4edff"/>'
+    + '<path d="M0 330 L88 238 L168 306 L252 232 L332 308 L400 256 L400 460 L0 460 Z" fill="#e8f8ff"/>'
+    + '<path d="M0 372 Q100 330 200 366 Q300 402 400 360 L400 460 L0 460 Z" fill="#fbfeff"/>'
+    + '<path d="M0 404 Q110 374 212 402 Q312 430 400 394 L400 460 L0 460 Z" fill="#ffffff"/>'
+    + '<g stroke="#d6ecf8" stroke-width="3" fill="none" opacity=".9"><path d="M40 416 q40 -10 78 0"/><path d="M288 422 q40 -10 78 0"/></g>';
+  }
+  if (id === "birthday"){
+    return ''
+    + '<path d="M8 36 Q200 6 392 32" stroke="#ffb3cd" stroke-width="3" fill="none"/>'
+    + bunting()
+    + '<g><ellipse cx="66" cy="128" rx="26" ry="31" fill="#ff8fab"/>'
+    + '<ellipse cx="66" cy="128" rx="17" ry="23" fill="#ffb3c9" opacity=".6"/>'
+    + '<path d="M66 159 q-6 26 4 44" stroke="#ff8fab" stroke-width="2" fill="none"/></g>'
+    + '<g><ellipse cx="338" cy="114" rx="23" ry="28" fill="#8ecae6"/>'
+    + '<ellipse cx="338" cy="114" rx="14" ry="20" fill="#bfe4f2" opacity=".7"/>'
+    + '<path d="M338 142 q6 24 -2 40" stroke="#8ecae6" stroke-width="2" fill="none"/></g>'
+    + '<g class="tw" fill="#ffd166"><path d="M122 74 l3 8 8 3 -8 3 -3 8 -3 -8 -8 -3 8 -3 z"/></g>'
+    + '<g class="tw" fill="#ff8fab"><path d="M270 84 l2.4 6.4 6.4 2.4 -6.4 2.4 -2.4 6.4 -2.4 -6.4 -6.4 -2.4 6.4 -2.4 z"/></g>';
+  }
+  return "";
+}
+
+function frontHTML(id){
+  if (id === "eat"){
+    return ''
+    + shadowSVG(200, 424, 88)
+    + '<g id="bowl"><ellipse cx="200" cy="432" rx="70" ry="16" fill="#f6f9ff"/>'
+    + '<path d="M130 432 q6 26 70 26 q64 0 70-26 z" fill="#e2eaf7"/>'
+    + '<path d="M130 432 q6 26 70 26 q64 0 70-26 z" fill="none" stroke="#cfd9ea" stroke-width="3"/>'
+    + '<g transform="translate(156 418)"><path d="M0 8 q17-16 36 0 q-19 16-36 0z" fill="#ff8a3d"/>'
+    + '<path d="M0 8 l-11-9 v18 z" fill="#ff8a3d"/><circle cx="9" cy="4.6" r="1.9" fill="#3a2a1a"/></g>'
+    + '<g transform="translate(206 421) scale(.86)"><path d="M0 8 q17-16 36 0 q-19 16-36 0z" fill="#ffa45c"/>'
+    + '<path d="M0 8 l-11-9 v18 z" fill="#ffa45c"/><circle cx="9" cy="4.6" r="1.9" fill="#3a2a1a"/></g></g>';
+  }
+  if (id === "study"){
+    return ''
+    + shadowSVG(200, 430, 94)
+    + '<g id="books"><rect x="298" y="408" width="58" height="12" rx="4" fill="#ff8fab"/>'
+    + '<rect x="303" y="396" width="50" height="12" rx="4" fill="#8ecae6"/>'
+    + '<rect x="308" y="384" width="42" height="12" rx="4" fill="#a0e7a0"/>'
+    + '<path d="M312 390h14M312 384v12" stroke="#fff" stroke-width="2" opacity=".7"/></g>'
+    + '<g id="floorPencil" transform="translate(62 414) rotate(-14)"><rect x="0" y="-3" width="52" height="6" rx="3" fill="#ffb347"/>'
+    + '<path d="M52 -3 l10 3 l-10 3z" fill="#f6e7cd"/></g>'
+    + '<g><rect x="74" y="424" width="44" height="6" rx="3" fill="#c9a7ff"/></g>';
+  }
+  if (id === "sleep"){
+    return ''
+    + '<g id="blanket"><path d="M28 352 h344 q14 0 14 14 v58 q0 14 -14 14 h-344 q-14 0 -14 -14 v-58 q0 -14 14 -14z" fill="#8ea3ff"/>'
+    + '<path d="M28 352 q86 18 172 0 q86 -18 172 0 v16 q-86 -16 -172 2 q-86 18 -172 0z" fill="#a9baff"/>'
+    + '<g fill="#fff" opacity=".55"><circle cx="84" cy="400" r="3"/><circle cx="156" cy="412" r="2.4"/>'
+    + '<circle cx="232" cy="398" r="2.8"/><circle cx="300" cy="414" r="2.2"/><circle cx="340" cy="392" r="2"/></g></g>'
+    + '<rect x="10" y="442" width="380" height="16" rx="8" fill="#2e3a72"/>'
+    + '<g id="zzz" fill="#dfe8ff" font-weight="900" font-family="system-ui,sans-serif">'
+    + '<text x="308" y="242" font-size="26">z</text>'
+    + '<text x="280" y="216" font-size="19">z</text>'
+    + '<text x="260" y="192" font-size="14">z</text></g>';
+  }
+  if (id === "play"){
+    return ''
+    + shadowSVG(197, 434, 96)
+    + '<path d="M0 436 Q100 404 200 430 Q300 456 400 424 L400 460 L0 460 Z" fill="#ffffff"/>'
+    + '<path d="M0 448 Q120 426 230 448 Q330 466 400 444 L400 460 L0 460 Z" fill="#eaf8ff"/>'
+    + '<g stroke="#d3ecf8" stroke-width="3" stroke-linecap="round" fill="none" opacity=".9">'
+    + '<path d="M54 452 q40 -12 80 0"/><path d="M266 456 q40 -12 80 0"/></g>';
+  }
+  if (id === "birthday"){
+    return ''
+    + '<g id="tableFront">'
+    + '<path d="M42 396 q0 54 30 64 h256 q30-10 30-64 z" fill="#ffc2d6"/>'
+    + '<path d="M42 396 q0 54 30 64 h256 q30-10 30-64 z" fill="none" stroke="#ff9fc0" stroke-width="3"/>'
+    + '<ellipse cx="200" cy="396" rx="158" ry="24" fill="#ffd9e6"/>'
+    + '<path d="M42 402 q158 30 316 0" stroke="#ff9fc0" stroke-width="3" fill="none" opacity=".55"/>'
+    + '<path d="M92 384 q18 10 36 0 q18 10 36 0 q18 10 36 0 q18 10 36 0 q18 10 36 0" stroke="#fff" stroke-width="3" fill="none" opacity=".7"/></g>'
+    + '<g id="cake"><ellipse cx="200" cy="394" rx="104" ry="14" fill="#fff" opacity=".95"/>'
+    + '<rect x="104" y="346" width="192" height="48" rx="13" fill="#ffd9e6"/>'
+    + '<path d="M104 360 q16 12 32 0 q16 12 32 0 q16 12 32 0 q16 12 32 0 q16 12 32 0 q16 12 32 0" fill="#fff" opacity=".85"/>'
+    + '<rect x="136" y="314" width="128" height="36" rx="11" fill="#ffb7cf"/>'
+    + '<path d="M136 326 q16 10 32 0 q16 10 32 0 q16 10 32 0 q16 10 32 0" fill="#fff" opacity=".92"/>'
+    + '<text x="200" y="384" text-anchor="middle" font-size="20" font-weight="900" fill="#d6336c">11</text>'
+    + '<g id="candles">' + candles() + '</g>'
+    + '<g id="flames">' + flames() + '</g>'
+    + '<g id="smoke" fill="none" stroke="#cfd6e4" stroke-width="2.4" stroke-linecap="round">'
+    + '<path d="M160 289 q-5-10 2-18"/><path d="M182 289 q-5-10 2-18"/><path d="M204 289 q-5-10 2-18"/>'
+    + '<path d="M226 289 q-5-10 2-18"/><path d="M248 289 q-5-10 2-18"/></g></g>'
+    + '<g><rect x="30" y="356" width="52" height="40" rx="8" fill="#8fd0ff"/>'
+    + '<rect x="30" y="356" width="52" height="13" rx="6" fill="#5fb6ee"/>'
+    + '<path d="M56 356v40" stroke="#fff" stroke-width="8"/>'
+    + '<circle cx="56" cy="349" r="10" fill="none" stroke="#ffd166" stroke-width="5"/></g>'
+    + '<g><rect x="318" y="360" width="48" height="36" rx="8" fill="#ffd166"/>'
+    + '<rect x="318" y="360" width="48" height="12" rx="5" fill="#ffbe3d"/>'
+    + '<path d="M342 360v36" stroke="#fff" stroke-width="8"/>'
+    + '<circle cx="342" cy="353" r="9" fill="none" stroke="#ff8fab" stroke-width="5"/></g>';
+  }
+  return "";
+}
+
+/* ===================== 动作动画 ===================== */
+function easeOutQuad(p){ return p * (2 - p); }
+function poseAt(keys, t){
+  var k0 = keys[0], k1 = keys[keys.length - 1];
+  for (var i = 0; i < keys.length - 1; i++){
+    if (t <= keys[i + 1].t){ k0 = keys[i]; k1 = keys[i + 1]; break; }
+    if (i === keys.length - 2){ k0 = keys[keys.length - 1]; k1 = k0; }
+  }
+  var span = k1.t - k0.t;
+  var p = span > 0 ? clamp((t - k0.t) / span, 0, 1) : 1;
+  p = easeOutQuad(p);
+  return {
+    x: k0.p.x + (k1.p.x - k0.p.x) * p,
+    y: k0.p.y + (k1.p.y - k0.p.y) * p,
+    r: k0.p.r + (k1.p.r - k0.p.r) * p,
+    sx: k0.p.sx + (k1.p.sx - k0.p.sx) * p,
+    sy: k0.p.sy + (k1.p.sy - k0.p.sy) * p
+  };
+}
+function applyPose(){
+  var p = S.pose, unit = S.size.unit || 1;
+  imgs[S.scene].style.transform =
+    "translate(" + (p.x * unit).toFixed(2) + "px," + (p.y * unit).toFixed(2) + "px) " +
+    "rotate(" + p.r.toFixed(2) + "deg) scale(" + p.sx.toFixed(3) + "," + p.sy.toFixed(3) + ")";
+}
+function invalidatePose(){ applyPose(); }
+
+function clearTimers(){
+  timers.forEach(function(t){ clearTimeout(t); });
+  timers = [];
+}
+function runAction(action){
+  clearTimers();
+  S.anim = { start: now(), dur: action.dur, keys: action.keys };
+  (action.sounds || []).forEach(function(s){
+    timers.push(setTimeout(function(){ sfx(s[1]); }, s[0] * 1000));
+  });
+  (action.fx || []).forEach(function(f){
+    timers.push(setTimeout(function(){ sceneFx(f[1]); }, f[0] * 1000));
+  });
+}
+
+function triggerPhase(force){
+  if (S.transitioning) return;
+  var t = now();
+  if (!force && t - (S.lastTrigger || 0) < 260) return;
+  S.lastTrigger = t;
+  var sc = SCENES[S.scene].id;
+  S.phase = (S.phase + 1) % 2;
+  runAction(ACTIONS[sc][S.phase]);
+  vibrate(9);
+  if (Math.random() < .32) say(pick(SCENES[S.scene].lines));
+}
+function greetAction(){
+  clearTimers();
+  S.anim = { start: now(), dur: GREET_ACTION.dur, keys: GREET_ACTION.keys };
+  GREET_ACTION.sounds.forEach(function(s){ timers.push(setTimeout(function(){ sfx(s[1]); }, s[0] * 1000)); });
+  GREET_ACTION.fx.forEach(function(f){ timers.push(setTimeout(function(){ sceneFx(f[1]); }, f[0] * 1000)); });
+}
+
+/* ===================== 场景切换 ===================== */
+function renderScene(i, opts){
+  opts = opts || {};
+  S.scene = i;
+  var sc = SCENES[i];
+  body.dataset.scene = sc.id;
+  bgArt.innerHTML = bgHTML(sc.id);
+  frontArt.innerHTML = frontHTML(sc.id);
+  imgs.forEach(function(im, k){ im.classList.toggle("on", k === i); });
+  pinguWrap.style.display = "block";
+  S.pose = {x:0,y:0,r:0,sx:1,sy:1};
+  S.anim = null;
+  S.phase = -1;
+  S.lastTrigger = 0;
+  S.blow[sc.id] = false;
+  clearTimers();
+  layoutPingu();
+  applyPose();
+  sceneName.textContent = sc.name;
+  sceneTip.textContent = sc.tip;
+  if (metaTheme) metaTheme.setAttribute("content", THEME[sc.id] || "#ffd9a0");
+  Array.prototype.forEach.call(nav.children, function(b, k){ b.classList.toggle("on", k === i); });
+  if (!opts.silent) say(sc.lines[0], true);
+}
+function buildNav(){
+  SCENES.forEach(function(sc, i){
+    var b = document.createElement("button");
+    b.type = "button";
+    b.innerHTML = '<span class="emo">' + sc.emo + '</span><span class="lab">' + sc.name + '</span>';
+    b.setAttribute("aria-label", sc.name);
+    b.addEventListener("click", function(e){ e.stopPropagation(); unlock(); goScene(i); });
+    nav.appendChild(b);
+  });
+}
+function goScene(i, silent){
+  i = ((i % SCENES.length) + SCENES.length) % SCENES.length;
+  if (S.transitioning || i === S.scene) return;
+  S.transitioning = true;
+  stage.classList.add("swap-out");
+  sfx("ding");
+  setTimeout(function(){
+    renderScene(i, { silent: silent });
+    stage.classList.remove("swap-out");
+    stage.classList.add("swap-in");
+    setTimeout(function(){ stage.classList.remove("swap-in"); S.transitioning = false; }, 400);
+  }, 200);
+}
+
+/* ===================== 吹蜡烛 / 彩蛋 ===================== */
+function blowCandles(){
+  var f = $("#flames"), smoke = $("#smoke");
+  if (!f) return;
+  if (!S.blow[SCENES[S.scene].id]){
+    S.blow[SCENES[S.scene].id] = true;
+    f.classList.add("out");
+    if (smoke) smoke.classList.add("show");
+    sfx("whoosh");
+    setTimeout(function(){
+      sfx("pop");
+      SND.melody();
+      fxEmit("confetti", 200, 220, 90, { spread: 260, speed: 1.4, up: 120, g: 210, life: 2.2, size: 6 });
+      fxEmit("cake", 30 + Math.random() * 340, -20, 6, { spread: 0, g: 80, life: 2.6, size: 4 });
+      showToast("🎉 生日惊喜！");
+    }, 320);
+    say("生日快乐，" + CONFIG.name + "！", true, 4200);
+    vibrate([12, 40, 20]);
+  } else {
+    fxEmit("confetti", 200, 200, 30, { spread: 180, speed: 1.1, up: 90, g: 200, life: 1.8 });
+    say(pick(SCENES[4].lines));
+  }
+}
+function easterEgg(){
+  cakeRain();
+  SND.birthdayBell();
+  say("生日快乐，" + CONFIG.name + "！🎂", true, 4600);
+  fxEmit("heart", 200, 230, 12, { spread: 110, speed: .9, up: 90, g: 40, life: 1.5 });
+}
+
+/* ===================== 手势 ===================== */
+function padLocal(e){
+  var r = pad.getBoundingClientRect();
+  return { x: e.clientX - r.left, y: e.clientY - r.top };
+}
+var padGesture = { id: null, fired: false, last: 0, pts: new Map() };
+function refreshPadDots(){
+  var n = padGesture.pts.size;
+  var dots = pad.querySelectorAll(".pad-count i");
+  for (var i = 0; i < dots.length; i++) dots[i].classList.toggle("on", i < n);
+  pad.classList.toggle("pressing", n > 0);
+}
+function padDown(e){
+  if (padGesture.pts.size >= 5) return;
+  e.preventDefault();
+  unlock();
+  var first = padGesture.pts.size === 0;
+  try { pad.setPointerCapture(e.pointerId); } catch (err) {}
+  var p = padLocal(e);
+  padGesture.pts.set(e.pointerId, { x: p.x, y: p.y });
+  if (first) padGesture.fired = false;
+  var rp = document.createElement("span");
+  rp.className = "ripple";
+  rp.style.left = p.x + "px"; rp.style.top = p.y + "px";
+  pad.appendChild(rp);
+  setTimeout(function(){ rp.remove(); }, 750);
+  SND.note(padGesture.pts.size);
+  vibrate(7);
+  refreshPadDots();
+  // 一次手势只触发一次
+  if (!padGesture.fired){ padGesture.fired = true; triggerPhase(); }
+}
+function padMove(e){
+  if (!padGesture.pts.has(e.pointerId)) return;
+  var p = padLocal(e);
+  padGesture.pts.set(e.pointerId, { x: p.x, y: p.y });
+  if (!padGesture.fired){ padGesture.fired = true; triggerPhase(); }
+}
+function padUp(e){
+  if (!padGesture.pts.has(e.pointerId)) return;
+  padGesture.pts.delete(e.pointerId);
+  if (padGesture.pts.size === 0) padGesture.fired = false;
+  refreshPadDots();
+}
+
+/* 舞台轻点 / 左右滑动 */
+var swipe = null;
+function stageDown(e){
+  if (e.target.closest("#pad")) return;
+  unlock();
+  swipe = { id: e.pointerId, x: e.clientX, y: e.clientY, t: now(), moved: 0 };
+}
+function stageMove(e){
+  if (!swipe || e.pointerId !== swipe.id) return;
+  swipe.moved = Math.max(swipe.moved, Math.hypot(e.clientX - swipe.x, e.clientY - swipe.y));
+}
+function stageUp(e){
+  if (!swipe || e.pointerId !== swipe.id) return;
+  var s = swipe; swipe = null;
+  var dx = e.clientX - s.x, dy = e.clientY - s.y;
+  var dt = now() - s.t;
+  if (Math.abs(dx) > 52 && Math.abs(dx) > Math.abs(dy) * 1.25){
+    goScene(S.scene + (dx < 0 ? 1 : -1));
+    vibrate(10);
+    return;
+  }
+  if (s.moved < 14 && dt < 600){
+    // 点生日蛋糕可以吹蜡烛，其余位置触发动作
+    if (SCENES[S.scene].id === "birthday" && tapOnCake(e)) blowCandles();
+    else triggerPhase();
+  }
+}
+function tapOnCake(e){
+  var c = document.querySelector("#cake");
+  if (!c) return false;
+  var b = c.getBoundingClientRect();
+  return e.clientX >= b.left && e.clientX <= b.right && e.clientY >= b.top && e.clientY <= b.bottom;
+}
+function stageCancel(){ swipe = null; }
+
+/* ===================== 打招呼 ===================== */
+function greet(){
+  unlock();
+  greetAction();
+  say("你好，" + CONFIG.name + "！", true, 5200);
+  SND.hum();
+  speak("你好，" + CONFIG.name + "。");
+  fxEmit("heart", 200, 240, 10, { spread: 90, speed: .9, up: 90, g: 50, life: 1.4 });
+  fxEmit("sparkle", 200, 220, 8, { spread: 130, speed: 1, up: 60, g: 30, life: 1.3 });
+  vibrate(14);
+}
+
+/* 语音识别：仅 https/localhost 且浏览器支持 */
+function setupMic(){
+  var SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+  if (!SR || !window.isSecureContext) return;
+  var btn = $("#micBtn");
+  btn.hidden = false;
+  var rec = null, listening = false, timer = null;
+  function stop(){
+    listening = false;
+    btn.classList.remove("listening");
+    clearTimeout(timer);
+    if (rec) { try { rec.stop(); } catch (e) {} }
+  }
+  btn.addEventListener("click", function(){
+    unlock();
+    if (listening) { stop(); return; }
+    try { rec = new SR(); } catch (e) { showToast("这个浏览器不支持语音识别"); return; }
+    rec.lang = "zh-CN";
+    rec.interimResults = false;
+    rec.maxAlternatives = 1;
+    rec.onstart = function(){
+      listening = true;
+      btn.classList.add("listening");
+      showToast("🎤 说「你好」或「生日快乐」");
+      timer = setTimeout(stop, 8000);
+    };
+    rec.onresult = function(ev){
+      var text = "";
+      for (var i = 0; i < ev.results.length; i++) text += ev.results[i][0].transcript;
+      stop();
+      if (/生日快乐/.test(text)){ easterEgg(); return; }
+      if (/你好|哈喽|嗨|hello|hi|早上好|晚上好/i.test(text) || text.length <= 4){ greet(); }
+      else showToast("听到：「" + text + "」");
+    };
+    rec.onerror = function(){ stop(); showToast("没有听清，点「👋 打招呼」也可以"); };
+    rec.onend = function(){ listening = false; btn.classList.remove("listening"); clearTimeout(timer); };
+    try { rec.start(); } catch (e) { showToast("麦克风没有启动成功"); }
+  });
+}
+
+/* ===================== 主循环 ===================== */
+var lastT = 0, ambT = 0;
+function loop(ts){
+  var dt = lastT ? Math.min((ts - lastT) / 1000, .05) : .016;
+  lastT = ts;
+  S.t += dt;
+  if (S.anim){
+    var elapsed = (now() - S.anim.start) / 1000;
+    if (elapsed >= S.anim.dur){
+      S.pose = poseAt(S.anim.keys, S.anim.dur);
+      S.anim = null;
+    } else {
+      S.pose = poseAt(S.anim.keys, elapsed);
+    }
+    applyPose();
+  }
+  // 环境粒子
+  ambT += dt;
+  if (ambT > .5){
+    ambT = 0;
+    var id = SCENES[S.scene].id;
+    if (id === "play") fxEmit("snow", Math.random() * 400, -8, 1, { spread: 6, speed: .3, g: 26, life: 4.5, size: 3 });
+    if (id === "birthday") fxEmit("sparkle", 40 + Math.random() * 320, 70 + Math.random() * 90, 1, { spread: 8, speed: .2, g: 8, life: 1.8, size: 2.2 });
+    if (id === "sleep") fxEmit("sparkle", 40 + Math.random() * 320, 60 + Math.random() * 90, 1, { spread: 6, speed: .15, g: 0, life: 2.4, size: 1.8, color: "#dfe8ff" });
+  }
+  drawFX(dt);
+  requestAnimationFrame(loop);
+}
+
+/* ===================== 农历生日 ===================== */
+function updateDays(){
+  var info;
+  try {
+    info = LunarBirthday.nextBirthday();
+  } catch (e) {
+    daysEl.textContent = "🎂 生日";
+    return null;
+  }
+  if (info.isToday){
+    daysEl.textContent = "🎂 就是今天！";
+    daysEl.title = "农历九月廿八 · 今天";
+    var ll = $("#lunarLine");
+    if (ll) ll.textContent = "— 今天是农历九月廿八 · 俊贤 " + CONFIG.age + " 岁生日快乐！—";
+    return 0;
+  }
+  daysEl.textContent = "🎂 " + info.days + " 天";
+  daysEl.title = "农历九月廿八 · " + info.date.m + "月" + info.date.d + "日";
+  var lunarLine = $("#lunarLine");
+  if (lunarLine) lunarLine.textContent = "— 农历九月廿八（" + info.date.m + " 月 " + info.date.d + " 日）还有 " + info.days + " 天 —";
+  return info.days;
+}
+
+/* ===================== 启动 ===================== */
+function unlock(){
+  if (!S.unlocked){ S.unlocked = true; ac(); }
+}
+function start(){
+  var welcome = $("#welcome");
+  welcome.classList.add("hide");
+  unlock();
+  greet();
+  if (updateDays() === 0){
+    setTimeout(function(){ goScene(4); }, 700);
+    setTimeout(function(){ blowCandles(); }, 1800);
+  }
+  showToast("左手点左下角圆盘，让 Pingu 动起来 🖐️");
+}
+function boot(){
+  buildNav();
+  fitStage();
+  setupMic();
+  var params = new URLSearchParams(location.search);
+  var sceneParam = params.get("scene") || params.get("s");
+  var nointro = params.get("nointro") === "1" || !!sceneParam;
+  var hash = (location.hash || "").replace(/^#/, "");
+  if (hash){ sceneParam = hash.replace(/^scene=/, ""); nointro = true; }
+  var startScene = 0;
+  if (sceneParam){
+    for (var i = 0; i < SCENES.length; i++) if (SCENES[i].id === sceneParam) startScene = i;
+  }
+  renderScene(startScene, { silent: nointro });
+  var days = updateDays();
+
+  $("#greetBtn").addEventListener("click", function(e){ e.stopPropagation(); greet(); });
+  $("#startBtn").addEventListener("click", function(e){ e.stopPropagation(); start(); });
+
+  pad.addEventListener("pointerdown", padDown);
+  pad.addEventListener("pointermove", padMove);
+  pad.addEventListener("pointerup", padUp);
+  pad.addEventListener("pointercancel", padUp);
+  pad.addEventListener("lostpointercapture", padUp);
+
+  stageWrap.addEventListener("pointerdown", stageDown);
+  window.addEventListener("pointermove", stageMove);
+  window.addEventListener("pointerup", stageUp);
+  window.addEventListener("pointercancel", stageCancel);
+  window.addEventListener("resize", fitStage);
+  window.addEventListener("orientationchange", function(){ setTimeout(fitStage, 150); });
+  if (window.visualViewport) window.visualViewport.addEventListener("resize", fitStage);
+
+  document.addEventListener("keydown", function(e){
+    if (e.key === "ArrowRight") goScene(S.scene + 1);
+    else if (e.key === "ArrowLeft") goScene(S.scene - 1);
+    else if (e.key === " "){ e.preventDefault(); triggerPhase(); }
+    else if (e.key === "g" || e.key === "G") greet();
+    else if (/^[1-5]$/.test(e.key)){ padGesture.pts.set("key" + e.key, {x:0,y:0}); refreshPadDots(); padGesture.pts.delete("key" + e.key); triggerPhase(); }
+  });
+
+  if (nointro){
+    var wl = $("#welcome");
+    wl.classList.add("hide");
+    wl.style.display = "none";
+    S.unlocked = true;
+  }
+  window.__pingu = {
+    S: S, goScene: goScene, trigger: triggerPhase, greet: greet, blow: blowCandles, egg: easterEgg,
+    // 给隔空手势模块复用的两个入口（等价于点击圆盘 / 右手滑动）
+    doAction: triggerPhase,
+    nextCharacter: function (d) { goScene(S.scene + (d || 1)); }
+  };
+  requestAnimationFrame(loop);
+}
+
+function err(msg){
+  // 隔空手势模块的资源加载错误由模块自己提示，不再顶红条吓人
+  if (/hands_solution|createMediapipe|packed_assets|MediaPipe/i.test(msg)) {
+    console.warn("[gesture]", msg);
+    return;
+  }
+  errbar.style.display = "block";
+  errbar.textContent = "出错啦：" + msg;
+}
+window.addEventListener("error", function(e){ err("JS异常：" + (e.message || "")); });
+window.addEventListener("unhandledrejection", function(e){ err("Promise异常：" + String(e.reason)); });
+
+if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", boot);
+else boot();
+})();
+</script>
+<script>__GESTURE_JS__</script>
+</body>
+</html>
