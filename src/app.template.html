@@ -9,6 +9,11 @@
 <meta name="theme-color" content="#ffd9a0">
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Ccircle cx='32' cy='32' r='30' fill='%23222631'/%3E%3Cellipse cx='32' cy='41' rx='16' ry='19' fill='%23fff3dc'/%3E%3Ccircle cx='24' cy='24' r='7' fill='%23fffdf8'/%3E%3Ccircle cx='40' cy='24' r='7' fill='%23fffdf8'/%3E%3Ccircle cx='24' cy='24' r='3' fill='%2314151c'/%3E%3Ccircle cx='40' cy='24' r='3' fill='%2314151c'/%3E%3Cpath d='M20 34 q12 -6 24 0 q-12 10 -24 0z' fill='%23ff9d2e'/%3E%3C/svg%3E">
 <title>Pingu 的小世界 · 给陈俊贤</title>
+<link rel="preload" as="image" href="assets/eat.webp">
+<link rel="preload" as="image" href="assets/study.webp">
+<link rel="preload" as="image" href="assets/sleep.webp">
+<link rel="preload" as="image" href="assets/play.webp">
+<link rel="preload" as="image" href="assets/birthday.webp">
 <style>
 /* ============ 基础 ============ */
 :root{
@@ -237,9 +242,21 @@ body[data-scene="sleep"] #pad{box-shadow:0 10px 30px rgba(0,0,0,.35),inset 0 0 2
 @media (prefers-reduced-motion:reduce){
   *{animation-duration:.001s !important;animation-iteration-count:1 !important}
 }
+/* 首屏加载动画：弱网时也不是白屏 */
+#bootSplash{position:fixed;inset:0;z-index:99;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:14px;
+  background:radial-gradient(120% 90% at 50% 20%,#ffe6c9,#f6b97a 55%,#e79a5a);color:#5a3216;
+  font-weight:800;font-family:"PingFang SC","Microsoft YaHei",system-ui,sans-serif;transition:opacity .35s}
+#bootSplash.out{opacity:0;pointer-events:none}
+#bootSplash .bs-logo{font-size:46px;animation:bsBob 1.2s ease-in-out infinite}
+#bootSplash .bs-txt{font-size:16px;letter-spacing:.5px}
+#bootSplash .bs-bar{width:150px;height:8px;border-radius:99px;background:rgba(255,255,255,.55);overflow:hidden}
+#bootSplash .bs-bar i{display:block;width:40%;height:100%;border-radius:99px;background:#fff;animation:bsBar 1.1s ease-in-out infinite}
+@keyframes bsBar{0%{transform:translateX(-110%)}100%{transform:translateX(280%)}}
+@keyframes bsBob{0%,100%{transform:translateY(0)}50%{transform:translateY(-8px)}}
 </style>
 </head>
 <body data-scene="eat">
+<div id="bootSplash" aria-hidden="true"><div class="bs-logo">🐧</div><div class="bs-txt">Pingu 正在赶来…</div><div class="bs-bar"><i></i></div></div>
 <div id="errbar"></div>
 
 <main id="app">
@@ -1222,8 +1239,14 @@ function start(){
   }
   showToast("左手点左下角圆盘，让 Pingu 动起来 🖐️");
 }
-function boot(){
-  buildNav();
+function hideBootSplash(){
+  var bs = document.getElementById("bootSplash");
+  if (!bs) return;
+  bs.classList.add("out");
+  setTimeout(function(){ if (bs && bs.parentNode) bs.parentNode.removeChild(bs); }, 420);
+}
+
+function boot(){  buildNav();
   fitStage();
   setupMic();
   var params = new URLSearchParams(location.search);
@@ -1237,6 +1260,7 @@ function boot(){
   }
   renderScene(startScene, { silent: nointro });
   var days = updateDays();
+  hideBootSplash();
 
   $("#greetBtn").addEventListener("click", function(e){ e.stopPropagation(); greet(); });
   $("#startBtn").addEventListener("click", function(e){ e.stopPropagation(); start(); });
@@ -1276,6 +1300,8 @@ function boot(){
 }
 
 function err(msg){
+  var bs = document.getElementById("bootSplash");
+  if (bs){ var t = bs.querySelector(".bs-txt"); if (t) t.textContent = "加载出错了…（" + msg + "）"; }
   errbar.style.display = "block";
   errbar.textContent = "出错啦：" + msg;
 }
