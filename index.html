@@ -71,8 +71,7 @@ button.chip:active{transform:scale(.93)}
 #bgArt,#frontArt{position:absolute;inset:0;width:100%;height:100%;display:block;pointer-events:none;overflow:hidden}
 #frontArt{z-index:3}
 #pinguWrap{position:absolute;left:50%;bottom:0;z-index:2;transform:translateX(-50%);pointer-events:none;will-change:transform}
-#pinguWrap img{display:none;width:auto;max-width:none;transform-origin:50% 100%;will-change:transform;filter:drop-shadow(0 12px 16px rgba(20,20,30,.22))}
-body[data-scene="sleep"] #pinguWrap img{filter:drop-shadow(0 10px 18px rgba(0,0,0,.4))}
+#pinguWrap img{display:none;width:auto;max-width:none;transform-origin:50% 100%;will-change:transform}
 #pinguWrap img.on{display:block}
 #fx{position:absolute;inset:0;z-index:4;width:100%;height:100%;pointer-events:none}
 
@@ -1510,13 +1509,13 @@ else boot();
     INVERT_SWIPE: false,    // 如果右手滑动方向反了：改成 true
 
     /* 防误识别：只有"像真手、并且确实在动"才触发 */
-    MIN_HAND_SCORE: 0.75,        // handedness 置信度
-    HAND_MIN_SPAN: 0.11,         // 手腕→中指根至少占画面 11%（太小=太远/误检）
-    HAND_MAX_SPAN: 0.85,
+    MIN_HAND_SCORE: 0.55,        // handedness 置信度（模型检测本身已是 0.6+）
+    HAND_MIN_SPAN: 0.06,         // 手腕→中指根至少占画面 6%
+    HAND_MAX_SPAN: 0.9,
     HAND_CONFIRM_FRAMES: 3,      // 连续 3 帧都检测到同一只手才算数
-    HAND_CENTER_MARGIN: 0.18,    // 手必须在画面中间区域（排除画面边缘拿手机的手）
-    FINGER_MIN: 3,               // 至少 3 根手指伸展（张开手掌才算"准备好了"）
-    ARM_FRAMES: 8,               // 连续 8 帧合格后才"就绪"（约 0.35 秒）
+    HAND_CENTER_MARGIN: 0.06,    // 手要在画面中间区域（排除画面边缘拿手机的手）
+    FINGER_MIN: 2,               // 至少 2 根手指伸展（张开手掌才算"准备好了"）
+    ARM_FRAMES: 8,               // 连续 8 帧合格后才"就绪"（约 0.3 秒）
     ARM_IDLE_RESET_MS: 700,      // 手离开画面 0.7 秒后解除就绪、需要重新举手
 
     LEFT_MOVE_THRESHOLD: 0.09,   // 左手指尖 240ms 内位移超过画面 9%
@@ -1564,6 +1563,7 @@ else boot();
   var initWatchdog = 0;
   var startGuard = 0;
   var resultCount = 0;
+  var startedAt = 0;
 
   function byId(id) { return document.getElementById(id); }
   function now() { return performance.now(); }
@@ -1799,8 +1799,8 @@ else boot();
         hands.setOptions({
           maxNumHands: CFG.MAX_NUM_HANDS,
           modelComplexity: CFG.MODEL_COMPLEXITY,
-          minDetectionConfidence: 0.75,
-          minTrackingConfidence: 0.7,
+          minDetectionConfidence: 0.6,
+          minTrackingConfidence: 0.6,
           selfieMode: CFG.SELFIE_MODE
         });
         hands.onResults(onResults);
@@ -1811,10 +1811,14 @@ else boot();
         if (my !== session) return;
         API.active = true;
         API.starting = false;
+        startedAt = now();
         els.cam.hidden = false;
         sizeCanvas();
         setBtn("on");
-        say("隔空手势已开启\n① 左手：张开手掌举到画面中间，动动手指 = Pingu 做动作\n② 右手：张开手掌，从左往右（或从右往左）滑一下 = 换下一只", 10000);
+        var uaWarn = /MicroMessenger|QQBrowser|Quark|UCBrowser|baidubrowser|; wv\)/i.test(navigator.userAgent)
+          ? "\n\n⚠️ 检测到你在 App 内置浏览器里，手势识别可能不稳定，建议用 Chrome / Edge / Safari 打开。"
+          : "";
+        say("隔空手势已开启\n① 左手：张开手掌举到画面中间，动动手指 = Pingu 做动作\n② 右手：张开手掌，从左往右（或从右往左）滑一下 = 换下一只" + uaWarn, 12000);
         setFooterHint("左手动指=动作 · 右手横滑=换一只");
         startWatchdog(my);
         pump();
@@ -1919,7 +1923,7 @@ else boot();
     var cy = (lm[0].y + lm[5].y + lm[9].y + lm[13].y + lm[17].y) / 5;
     var m = CFG.HAND_CENTER_MARGIN;
     if (cx < m || cx > 1 - m) return false;
-    if (cy < 0.15 || cy > 0.78) return false; // 太靠上/太靠下（比如拿手机的手）都不算
+    if (cy < 0.08 || cy > 0.92) return false; // 太靠上/太靠下（比如拿手机的手）都不算
     for (var i = 0; i < 21; i++) {
       if (lm[i].x < -0.04 || lm[i].x > 1.04 || lm[i].y < -0.04 || lm[i].y > 1.04) return false;
     }
@@ -1938,8 +1942,9 @@ else boot();
     var c = els.ctx2d, W = els.canvas.width, H = els.canvas.height;
     c.clearRect(0, 0, W, H);
     for (var k = 0; k < hands.length; k++) {
-      var lm = hands[k].lm, label = hands[k].label;
-      var color = label === "Left" ? "#7bdff2" : "#ffd166";
+      var lm = hands[k].lm, label = hands[k].label, ok = hands[k].ok;
+      var color = !ok ? "rgba(255,255,255,.45)"
+        : (label === "Left" ? "#7bdff2" : "#ffd166");
       c.strokeStyle = color; c.lineWidth = Math.max(1.5, W / 90); c.globalAlpha = .95;
       for (var i = 0; i < HAND_CONNECTIONS.length; i++) {
         var a = lm[HAND_CONNECTIONS[i][0]], b = lm[HAND_CONNECTIONS[i][1]];
@@ -1957,7 +1962,8 @@ else boot();
       c.globalAlpha = 1;
       c.font = "bold " + Math.round(W / 12) + "px system-ui,sans-serif";
       c.fillStyle = color;
-      c.fillText(label === "Left" ? "左" : "右", (1 - lm[0].x) * W - W / 12, Math.max(12, lm[0].y * H + H / 8));
+      var mark = label === "Left" ? "左" : (label === "Right" ? "右" : "?");
+      c.fillText(mark, (1 - lm[0].x) * W - W / 12, Math.max(12, lm[0].y * H + H / 8));
     }
   }
 
@@ -1967,20 +1973,24 @@ else boot();
     clearTimeout(initWatchdog);
     if (!firstResultShown) {
       firstResultShown = true;
-      say("已识别摄像头画面，举起手试试 ✋", 2600);
+      say("已识别摄像头画面，举起手掌试试 ✋", 2600);
     }
     var t = now();
     var seenLeft = false, seenRight = false;
-    var drawn = [];
+    var drawn = [], rawCount = 0, okCount = 0;
 
     for (var i = 0; i < res.multiHandLandmarks.length; i++) {
       var lm = res.multiHandLandmarks[i];
       if (!lm || lm.length < 21) continue;
+      rawCount++;
       var hd = res.multiHandedness && res.multiHandedness[i];
-      if (!handOk(lm, hd)) continue;           // 不像真手 → 直接忽略
-      var label = hd.label;
-      if (CFG.SWAP_HANDS) label = (label === "Left") ? "Right" : "Left";
-      drawn.push({ lm: lm, label: label });
+      var label = hd && hd.label ? hd.label : "?";
+      if (label !== "?") {
+        if (CFG.SWAP_HANDS) label = (label === "Left") ? "Right" : "Left";
+        drawn.push({ lm: lm, label: label, ok: handOk(lm, hd) });
+      }
+      if (!handOk(lm, hd)) continue;           // 不像真手 → 不参与触发
+      okCount++;
       if (label === "Left") { seenLeft = true; trackLeft(lm, t); }
       else if (label === "Right") { seenRight = true; trackRight(lm, t); }
     }
@@ -1992,12 +2002,23 @@ else boot();
     if (t - lastHint > 220) {
       lastHint = t;
       var L = tracks.Left, R = tracks.Right;
-      els.hint.textContent =
-        L.armed && R.armed ? "双手就绪 ✓"
-        : L.armed ? "左手 ✓ 动动手指"
-        : R.armed ? "右手 ✓ 横向滑"
-        : seenLeft || seenRight ? "张开手掌，停一下"
-        : "举起手试试";
+      if (resultCount === 0) {
+        els.hint.textContent = (startedAt && now() - startedAt > 8000)
+          ? "模型没出结果 · 换 Chrome 试试"
+          : "模型启动中…";
+      } else if (rawCount === 0) {
+        els.hint.textContent = "举起手掌试试";
+      } else if (okCount === 0) {
+        els.hint.textContent = "手靠近一点，张开手掌";
+      } else if (!L.armed && !R.armed) {
+        els.hint.textContent = "保持手掌 0.3 秒…";
+      } else if (L.armed && R.armed) {
+        els.hint.textContent = "双手就绪 ✓";
+      } else if (L.armed) {
+        els.hint.textContent = "左手 ✓ 动动手指";
+      } else {
+        els.hint.textContent = "右手 ✓ 横向滑";
+      }
     }
   }
 
