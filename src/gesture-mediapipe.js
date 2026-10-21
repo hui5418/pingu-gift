@@ -25,7 +25,7 @@
     INVERT_SWIPE: false,    // 如果右手滑动方向反了：改成 true
 
     /* 防误识别：只有"像真手、并且确实在动"才触发 */
-    MIN_HAND_SCORE: 0.55,        // handedness 置信度（模型检测本身已是 0.6+）
+    MIN_HAND_SCORE: 0.45,        // handedness 置信度（实测真实举手常只有 0.5 左右）
     HAND_MIN_SPAN: 0.06,         // 手腕→中指根至少占画面 6%
     HAND_MAX_SPAN: 0.9,
     HAND_CONFIRM_FRAMES: 3,      // 连续 3 帧都检测到同一只手才算数
@@ -50,7 +50,13 @@
     SEND_INTERVAL_MS: 45,        // 送帧节流 ≈22fps
     MAX_NUM_HANDS: 2,
     SELFIE_MODE: true,
-    MODEL_COMPLEXITY: 0
+    MODEL_COMPLEXITY: 0,
+
+    /* 本地 MediaPipe Tasks Vision（来自 bloom-gesture-kit，Apache-2.0）
+       优先用本地模型（不依赖 CDN），失败再回退旧版 CDN Hands */
+    TASKS_BUNDLE: "./gesture/lib/vision_bundle.mjs",
+    TASKS_WASM: "./gesture/lib/wasm/",
+    TASKS_MODEL: "./gesture/models/hand_landmarker.task"
   };
 
   var TIP = 8;  // 食指指尖
@@ -64,6 +70,8 @@
   var API = { active: false, starting: false, error: "" };
   var els = {};
   var hands = null;
+  var landmarker = null;
+  var engine = "";       // "tasks" | "legacy"
   var stream = null;
   var rafId = 0;
   var lastSend = 0;
@@ -280,24 +288,19 @@
     API.error = "";
     resultCount = 0;
     setBtn("busy");
-    say("正在加载手势模型…（需要联网，首次约几 MB）", 60000);
+    say("正在启动摄像头并加载手势模型…", 60000);
     installAssetShim();
     clearTimeout(startGuard);
     startGuard = setTimeout(function () {
       if (my === session && API.starting) {
-        fail("加载超时（网络可能访问不了 cdn.jsdelivr.net）");
+        fail("加载超时（本地模型或网络异常）");
       }
-    }, 20000);
+    }, 25000);
 
-    loadMediaPipe()
-      .then(function (base) {
-        cdnBase = base;
-        if (typeof window.Hands !== "function") throw new Error("MediaPipe 初始化失败（CDN 脚本没执行）");
-        return navigator.mediaDevices.getUserMedia({
-          video: { facingMode: "user", width: { ideal: 640 }, height: { ideal: 480 } },
-          audio: false
-        });
-      })
+    navigator.mediaDevices.getUserMedia({
+      video: { facingMode: "user", width: { ideal: 640 }, height: { ideal: 480 } },
+      audio: false
+    })
       .then(function (s) {
         if (my !== session) { try { s.getTracks().forEach(function (t) { t.stop(); }); } catch (e) {} return; }
         stream = s;
@@ -311,17 +314,7 @@
       })
       .then(function () {
         if (my !== session) return;
-        hands = new window.Hands({ locateFile: function (file) { return cdnBase + file; } });
-        hands.setOptions({
-          maxNumHands: CFG.MAX_NUM_HANDS,
-          modelComplexity: CFG.MODEL_COMPLEXITY,
-          minDetectionConfidence: 0.6,
-          minTrackingConfidence: 0.6,
-          selfieMode: CFG.SELFIE_MODE
-        });
-        hands.onResults(onResults);
-        // 主动初始化：把资源加载错误转成可捕获的 Promise 错误
-        return (typeof hands.initialize === "function") ? hands.initialize() : null;
+        return initEngine();
       })
       .then(function () {
         if (my !== session) return;
@@ -350,6 +343,61 @@
         fail(msg);
       });  }
 
+  /* ---------------- 手势引擎：优先本地 Tasks Vision，失败回退 CDN Hands ---------------- */
+  function absoluteURL(p) {
+    try { return new URL(p, location.href).href; } catch (e) { return p; }
+  }
+
+  function initEngine() {
+    return initTasks().catch(function (err) {
+      console.warn("[gesture] Tasks Vision 不可用，回退 CDN Hands:", err && err.message);
+      return initLegacy();
+    });
+  }
+
+  function initTasks() {
+    return import(absoluteURL(CFG.TASKS_BUNDLE)).then(function (mod) {
+      if (!mod || !mod.FilesetResolver || !mod.HandLandmarker) throw new Error("Tasks Vision 模块无效");
+      return mod.FilesetResolver.forVisionTasks(absoluteURL(CFG.TASKS_WASM)).then(function (fileset) {
+        var options = {
+          baseOptions: {
+            modelAssetPath: absoluteURL(CFG.TASKS_MODEL),
+            delegate: "GPU"
+          },
+          runningMode: "VIDEO",
+          numHands: CFG.MAX_NUM_HANDS,
+          minHandDetectionConfidence: 0.5,
+          minTrackingConfidence: 0.5
+        };
+        return mod.HandLandmarker.createFromOptions(fileset, options).catch(function () {
+          options.baseOptions.delegate = "CPU";
+          return mod.HandLandmarker.createFromOptions(fileset, options);
+        }).then(function (lm) {
+          landmarker = lm;
+          engine = "tasks";
+        });
+      });
+    });
+  }
+
+  function initLegacy() {
+    return loadMediaPipe().then(function (base) {
+      cdnBase = base;
+      if (typeof window.Hands !== "function") throw new Error("MediaPipe 初始化失败（CDN 脚本没执行）");
+      hands = new window.Hands({ locateFile: function (file) { return cdnBase + file; } });
+      hands.setOptions({
+        maxNumHands: CFG.MAX_NUM_HANDS,
+        modelComplexity: CFG.MODEL_COMPLEXITY,
+        minDetectionConfidence: 0.6,
+        minTrackingConfidence: 0.6,
+        selfieMode: CFG.SELFIE_MODE
+      });
+      hands.onResults(onResults);
+      engine = "legacy";
+      return (typeof hands.initialize === "function") ? hands.initialize() : null;
+    });
+  }
+
   function startWatchdog(my) {
     clearTimeout(initWatchdog);
     initWatchdog = setTimeout(function () {
@@ -369,6 +417,9 @@
     if (rafId) { cancelAnimationFrame(rafId); rafId = 0; }
     try { if (hands && hands.close) hands.close(); } catch (e) {}
     hands = null;
+    try { if (landmarker && landmarker.close) landmarker.close(); } catch (e) {}
+    landmarker = null;
+    engine = "";
     if (stream) {
       try { stream.getTracks().forEach(function (t) { t.stop(); }); } catch (e) {}
       stream = null;
@@ -395,6 +446,7 @@
     setBtn("off");
     say("已关闭隔空手势，点击圆盘玩法照旧", 2600);
   }
+
   /* ---------------- 送帧 ---------------- */
   function pump() {
     if (!API.active) return;
@@ -406,9 +458,22 @@
     if (t - lastSend < CFG.SEND_INTERVAL_MS) return;
     lastSend = t;
     try {
-      var p = hands.send({ image: v });
-      if (p && p.catch) p.catch(function () {});
-    } catch (e) {}
+      if (engine === "legacy" && hands) {
+        var p = hands.send({ image: v });
+        if (p && p.catch) p.catch(function () {});
+      } else if (engine === "tasks" && landmarker) {
+        var res = landmarker.detectForVideo(v, performance.now());
+        if (res) {
+          var mapped = (res.handednesses || []).map(function (h) {
+            var c = (h && h[0]) || h || {};
+            return { label: c.categoryName || c.label, score: c.score };
+          });
+          onResults({ multiHandLandmarks: res.landmarks || [], multiHandedness: mapped });
+        }
+      }
+    } catch (e) {
+      console.warn("[gesture] detect error", e && e.message);
+    }
   }
 
   /* ---------------- 识别结果 ---------------- */
@@ -500,7 +565,7 @@
       if (!lm || lm.length < 21) continue;
       rawCount++;
       var hd = res.multiHandedness && res.multiHandedness[i];
-      var label = hd && hd.label ? hd.label : "?";
+      var label = hd && (hd.label || hd.categoryName) ? (hd.label || hd.categoryName) : "?";
       if (label !== "?") {
         if (CFG.SWAP_HANDS) label = (label === "Left") ? "Right" : "Left";
         drawn.push({ lm: lm, label: label, ok: handOk(lm, hd) });
@@ -685,7 +750,7 @@
       return {
         supported: supported(), active: API.active, starting: API.starting, error: API.error,
         left: tracks.Left.visible, right: tracks.Right.visible, cdn: cdnBase,
-        results: resultCount, protocol: location.protocol
+        results: resultCount, protocol: location.protocol, engine: engine
       };
     },
     // 仅测试用：喂一个归一化坐标（会完整走 handOk 防误识别检查）

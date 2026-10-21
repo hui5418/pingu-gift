@@ -11,3 +11,6 @@ desktop.ini
 # 临时测试产物
 _shots/
 tools/_shots/
+
+# 本地自签名证书
+.certs/
