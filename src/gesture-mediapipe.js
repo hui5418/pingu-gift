@@ -26,10 +26,13 @@
 
     /* 防误识别：只有"像真手、并且确实在动"才触发 */
     MIN_HAND_SCORE: 0.75,        // handedness 置信度
-    HAND_MIN_SPAN: 0.09,         // 手腕→中指根至少占画面 9%（太小=太远/误检）
+    HAND_MIN_SPAN: 0.11,         // 手腕→中指根至少占画面 11%（太小=太远/误检）
     HAND_MAX_SPAN: 0.85,
     HAND_CONFIRM_FRAMES: 3,      // 连续 3 帧都检测到同一只手才算数
-    HAND_CENTER_MARGIN: 0.15,    // 手必须在画面中间区域（排除画面边缘拿手机的手）
+    HAND_CENTER_MARGIN: 0.18,    // 手必须在画面中间区域（排除画面边缘拿手机的手）
+    FINGER_MIN: 3,               // 至少 3 根手指伸展（张开手掌才算"准备好了"）
+    ARM_FRAMES: 8,               // 连续 8 帧合格后才"就绪"（约 0.35 秒）
+    ARM_IDLE_RESET_MS: 700,      // 手离开画面 0.7 秒后解除就绪、需要重新举手
 
     LEFT_MOVE_THRESHOLD: 0.09,   // 左手指尖 240ms 内位移超过画面 9%
     LEFT_WINDOW_MS: 240,
@@ -51,6 +54,13 @@
   };
 
   var TIP = 8;  // 食指指尖
+  var HAND_CONNECTIONS = [
+    [0,1],[1,2],[2,3],[3,4],
+    [0,5],[5,6],[6,7],[7,8],
+    [5,9],[9,10],[10,11],[11,12],
+    [9,13],[13,14],[14,15],[15,16],
+    [13,17],[17,18],[18,19],[19,20],[0,17]
+  ];
   var API = { active: false, starting: false, error: "" };
   var els = {};
   var hands = null;
@@ -63,8 +73,8 @@
   var lastLeft = 0, lastRight = 0;
   var lastHint = 0;
   var tracks = {
-    Left:  { samples: [], visible: false, seenAt: 0, enterAt: 0, frames: 0 },
-    Right: { samples: [], visible: false, seenAt: 0, enterAt: 0, frames: 0 }
+    Left:  { samples: [], visible: false, seenAt: 0, enterAt: 0, frames: 0, armed: false },
+    Right: { samples: [], visible: false, seenAt: 0, enterAt: 0, frames: 0, armed: false }
   };
   var initWatchdog = 0;
   var startGuard = 0;
@@ -126,6 +136,7 @@
       ".g-cam{position:absolute;top:6px;right:6px;z-index:9;width:104px;height:78px;border-radius:14px;overflow:hidden;",
       "background:#000;border:2px solid rgba(255,255,255,.75);box-shadow:0 8px 20px rgba(0,0,0,.28);}",
       ".g-cam video{width:100%;height:100%;object-fit:cover;transform:scaleX(-1);display:block}",
+      ".g-cam canvas{position:absolute;inset:0;width:100%;height:100%;pointer-events:none}",
       ".g-cam .g-hint{position:absolute;left:0;right:0;bottom:0;font-size:9px;font-weight:800;color:#fff;",
       "background:rgba(0,0,0,.45);text-align:center;padding:2px 0;letter-spacing:.3px;white-space:nowrap;overflow:hidden}",
       ".g-msg{position:fixed;left:50%;bottom:29%;transform:translate(-50%,8px);z-index:40;max-width:86vw;",
@@ -151,7 +162,7 @@
     cam.id = "gestureCam";
     cam.className = "g-cam";
     cam.hidden = true;
-    cam.innerHTML = '<video id="gestureVideo" muted playsinline autoplay></video><span class="g-hint">举起手试试</span>';
+    cam.innerHTML = '<video id="gestureVideo" muted playsinline autoplay></video><canvas id="gestureCanvas"></canvas><span class="g-hint">举起手试试</span>';
     byId("stageWrap").appendChild(cam);
 
     var msg = document.createElement("div");
@@ -162,6 +173,8 @@
     els.btn = btn;
     els.cam = cam;
     els.video = byId("gestureVideo");
+    els.canvas = byId("gestureCanvas");
+    els.ctx2d = els.canvas.getContext("2d");
     els.hint = cam.querySelector(".g-hint");
     els.msg = msg;
   }
@@ -182,6 +195,19 @@
     els.msg.classList.add("show");
     clearTimeout(say._t);
     say._t = setTimeout(function () { els.msg.classList.remove("show"); }, ms || 2600);
+  }
+
+  /* 开启后把页面底部提示改成手势说明，关闭时恢复 */
+  var originalSwipeHint = null;
+  function setFooterHint(text) {
+    var el = document.getElementById("swipeHint");
+    if (!el) return;
+    if (originalSwipeHint === null) originalSwipeHint = el.textContent;
+    el.textContent = text;
+  }
+  function restoreFooterHint() {
+    var el = document.getElementById("swipeHint");
+    if (el && originalSwipeHint !== null) el.textContent = originalSwipeHint;
   }
 
   /* ---------------- 加载 MediaPipe Hands ---------------- */
@@ -301,8 +327,10 @@
         API.active = true;
         API.starting = false;
         els.cam.hidden = false;
+        sizeCanvas();
         setBtn("on");
-        say("隔空手势已开启：左手动一动 / 右手左右滑", 4200);
+        say("隔空手势已开启\n① 左手：张开手掌举到画面中间，动动手指 = Pingu 做动作\n② 右手：张开手掌，从左往右（或从右往左）滑一下 = 换下一只", 10000);
+        setFooterHint("左手动指=动作 · 右手横滑=换一只");
         startWatchdog(my);
         pump();
       })
@@ -332,6 +360,7 @@
     API.starting = false;
     clearTimeout(initWatchdog);
     clearTimeout(startGuard);
+    restoreFooterHint();
     if (rafId) { cancelAnimationFrame(rafId); rafId = 0; }
     try { if (hands && hands.close) hands.close(); } catch (e) {}
     hands = null;
@@ -351,6 +380,7 @@
     st.visible = false;
     st.enterAt = 0;
     st.frames = 0;
+    st.armed = false;
   }
 
   function stop() {
@@ -382,20 +412,68 @@
     return Math.sqrt(dx * dx + dy * dy);
   }
 
+  /* 数一数有几根手指是伸开的（张开手掌） */
+  function fingersExtended(lm) {
+    var wrist = lm[0], n = 0;
+    var pairs = [[8, 6], [12, 10], [16, 14], [20, 18]];
+    for (var i = 0; i < pairs.length; i++) {
+      var tip = lm[pairs[i][0]], pip = lm[pairs[i][1]];
+      if (d2(tip, wrist) > d2(pip, wrist) * 1.12) n++;
+    }
+    if (d2(lm[4], wrist) > d2(lm[2], wrist) * 1.05) n++;  // 大拇指
+    return n;
+  }
+
   /* 是不是"真的有一只手举在画面中间"（过滤误检 / 画面边缘的手） */
   function handOk(lm, hd) {
     if (!hd || hd.score < CFG.MIN_HAND_SCORE) return false;
     var span = d2(lm[0], lm[9]);              // 手腕 → 中指根
     if (span < CFG.HAND_MIN_SPAN || span > CFG.HAND_MAX_SPAN) return false;
+    if (fingersExtended(lm) < CFG.FINGER_MIN) return false;  // 没张开手掌不算
     var cx = (lm[0].x + lm[5].x + lm[9].x + lm[13].x + lm[17].x) / 5;
     var cy = (lm[0].y + lm[5].y + lm[9].y + lm[13].y + lm[17].y) / 5;
     var m = CFG.HAND_CENTER_MARGIN;
     if (cx < m || cx > 1 - m) return false;
-    if (cy < 0.12 || cy > 0.80) return false; // 太靠上/太靠下（比如拿手机的手）都不算
+    if (cy < 0.15 || cy > 0.78) return false; // 太靠上/太靠下（比如拿手机的手）都不算
     for (var i = 0; i < 21; i++) {
       if (lm[i].x < -0.04 || lm[i].x > 1.04 || lm[i].y < -0.04 || lm[i].y > 1.04) return false;
     }
     return true;
+  }
+
+  /* ---------------- 小窗里的手部骨架（让弟弟看到"识别到了哪只手"） ---------------- */
+  function sizeCanvas() {
+    if (!els.canvas || !els.cam) return;
+    var dpr = Math.min(window.devicePixelRatio || 1, 2);
+    els.canvas.width = Math.round((els.cam.clientWidth || 104) * dpr);
+    els.canvas.height = Math.round((els.cam.clientHeight || 78) * dpr);
+  }
+  function drawHands(hands) {
+    if (!els.ctx2d || !els.canvas) return;
+    var c = els.ctx2d, W = els.canvas.width, H = els.canvas.height;
+    c.clearRect(0, 0, W, H);
+    for (var k = 0; k < hands.length; k++) {
+      var lm = hands[k].lm, label = hands[k].label;
+      var color = label === "Left" ? "#7bdff2" : "#ffd166";
+      c.strokeStyle = color; c.lineWidth = Math.max(1.5, W / 90); c.globalAlpha = .95;
+      for (var i = 0; i < HAND_CONNECTIONS.length; i++) {
+        var a = lm[HAND_CONNECTIONS[i][0]], b = lm[HAND_CONNECTIONS[i][1]];
+        c.beginPath();
+        c.moveTo((1 - a.x) * W, a.y * H);   // 视频是镜像显示的，坐标也镜像
+        c.lineTo((1 - b.x) * W, b.y * H);
+        c.stroke();
+      }
+      c.fillStyle = color;
+      for (var j = 0; j < lm.length; j++) {
+        c.beginPath();
+        c.arc((1 - lm[j].x) * W, lm[j].y * H, Math.max(1.2, W / 110), 0, 6.283);
+        c.fill();
+      }
+      c.globalAlpha = 1;
+      c.font = "bold " + Math.round(W / 12) + "px system-ui,sans-serif";
+      c.fillStyle = color;
+      c.fillText(label === "Left" ? "左" : "右", (1 - lm[0].x) * W - W / 12, Math.max(12, lm[0].y * H + H / 8));
+    }
   }
 
   function onResults(res) {
@@ -408,6 +486,7 @@
     }
     var t = now();
     var seenLeft = false, seenRight = false;
+    var drawn = [];
 
     for (var i = 0; i < res.multiHandLandmarks.length; i++) {
       var lm = res.multiHandLandmarks[i];
@@ -416,18 +495,23 @@
       if (!handOk(lm, hd)) continue;           // 不像真手 → 直接忽略
       var label = hd.label;
       if (CFG.SWAP_HANDS) label = (label === "Left") ? "Right" : "Left";
+      drawn.push({ lm: lm, label: label });
       if (label === "Left") { seenLeft = true; trackLeft(lm, t); }
       else if (label === "Right") { seenRight = true; trackRight(lm, t); }
     }
+    drawHands(drawn);
 
-    if (!seenLeft && t - tracks.Left.seenAt > 400) resetTrack(tracks.Left);
-    if (!seenRight && t - tracks.Right.seenAt > 400) resetTrack(tracks.Right);
+    if (!seenLeft && t - tracks.Left.seenAt > CFG.ARM_IDLE_RESET_MS) resetTrack(tracks.Left);
+    if (!seenRight && t - tracks.Right.seenAt > CFG.ARM_IDLE_RESET_MS) resetTrack(tracks.Right);
 
     if (t - lastHint > 220) {
       lastHint = t;
-      els.hint.textContent = seenLeft && seenRight ? "左手 ✓ 右手 ✓"
-        : seenLeft ? "左手 ✓ 动一动"
-        : seenRight ? "右手 ✓ 左右滑"
+      var L = tracks.Left, R = tracks.Right;
+      els.hint.textContent =
+        L.armed && R.armed ? "双手就绪 ✓"
+        : L.armed ? "左手 ✓ 动动手指"
+        : R.armed ? "右手 ✓ 横向滑"
+        : seenLeft || seenRight ? "张开手掌，停一下"
         : "举起手试试";
     }
   }
@@ -455,8 +539,9 @@
     st.seenAt = t;
     st.frames = (st.frames || 0) + 1;
     if (!st.visible) { st.visible = true; st.enterAt = t; return; }
-    if (st.frames < CFG.HAND_CONFIRM_FRAMES) return;
+    if (st.frames < CFG.ARM_FRAMES) return;          // 先"举手就绪"
     if (t - st.enterAt < CFG.HAND_SETTLE_MS) return;
+    st.armed = true;
     if (t - lastLeft < CFG.LEFT_COOLDOWN_MS) return;
     var ref = sampleNear(st, t - CFG.LEFT_WINDOW_MS, 150);
     var near = sampleNear(st, t - CFG.LEFT_SHORT_MS, 80);
@@ -480,8 +565,9 @@
     st.seenAt = t;
     st.frames = (st.frames || 0) + 1;
     if (!st.visible) { st.visible = true; st.enterAt = t; return; }
-    if (st.frames < CFG.HAND_CONFIRM_FRAMES) return;
+    if (st.frames < CFG.ARM_FRAMES) return;
     if (t - st.enterAt < CFG.HAND_SETTLE_MS) return;
+    st.armed = true;
     if (t - lastRight < CFG.RIGHT_COOLDOWN_MS) return;
     var ref = sampleNear(st, t - CFG.RIGHT_WINDOW_MS, 200);
     var near = sampleNear(st, t - CFG.RIGHT_SHORT_MS, 90);
@@ -526,6 +612,7 @@
       if (API.active || API.starting) stop();
       else start();
     });
+    window.addEventListener("resize", function () { if (API.active) sizeCanvas(); });
     // MediaPipe 资源加载器偶尔会异步抛错，这里单独兜住，给出可理解的提示
     window.addEventListener("error", function (ev) {
       var msg = (ev && (ev.message || "")) + "";
