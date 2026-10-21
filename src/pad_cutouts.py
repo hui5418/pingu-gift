@@ -11,7 +11,7 @@ from PIL import Image
 
 HERE = pathlib.Path(__file__).resolve().parent
 ROOT = HERE.parent
-SRC = HERE / "cutouts"
+SRC = HERE / "cutouts4"
 OUT = ROOT / "assets"
 PAD = 0.08
 NAMES = ["eat", "study", "sleep", "play", "birthday"]
