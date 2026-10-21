@@ -71,7 +71,7 @@ button.chip:active{transform:scale(.93)}
 #bgArt,#frontArt{position:absolute;inset:0;width:100%;height:100%;display:block;pointer-events:none;overflow:hidden}
 #frontArt{z-index:3}
 #pinguWrap{position:absolute;left:50%;bottom:0;z-index:2;transform:translateX(-50%);pointer-events:none;will-change:transform}
-#pinguWrap img{display:none;width:auto;max-width:none;transform-origin:50% 100%;will-change:transform}
+#pinguWrap img{display:none;width:auto;max-width:none;transform-origin:50% 100%}
 #pinguWrap img.on{display:block}
 #fx{position:absolute;inset:0;z-index:4;width:100%;height:100%;pointer-events:none}
 
@@ -276,7 +276,7 @@ body[data-scene="sleep"] #pad{box-shadow:0 10px 30px rgba(0,0,0,.35),inset 0 0 2
         <span class="pad-ring"></span><span class="pad-ring r2"></span>
         <div class="pad-center">
           <span class="pad-icon">🖐️</span>
-          <span class="pad-label">左手点这里</span>
+          <span class="pad-label">点这里</span>
           <span class="pad-count"><i></i><i></i><i></i><i></i><i></i></span>
         </div>
       </div>
@@ -349,6 +349,9 @@ var LAYOUT = {
   play:     { h:330, bottom:428, x:197 },
   birthday: { h:280, bottom:398, x:224 }
 };
+// 抠图上下/左右保留了 8% 透明安全边（防止部分手机浏览器裁掉图片边缘），
+// 图片实际高度 = 角色高度 × IMG_SCALE；脚仍对齐 LAYOUT.bottom。
+var IMG_SCALE = 670 / 620;
 
 /* A/B 两段动作：keys 为累计时间（秒）的关键帧，pose 为舞台坐标下的位移/旋转/缩放 */
 function P(o){ return Object.assign({x:0,y:0,r:0,sx:1,sy:1}, o); }
@@ -602,7 +605,7 @@ function layoutPingu(){
   var L = LAYOUT[SCENES[S.scene].id];
   var unit = S.size.unit || 1;
   var img = imgs[S.scene];
-  img.style.height = (L.h * unit) + "px";
+  img.style.height = (L.h * IMG_SCALE * unit) + "px";
   pinguWrap.style.bottom = ((460 - L.bottom) * unit) + "px";
   pinguWrap.style.marginLeft = ((L.x - 200) * unit) + "px";
 }
@@ -1267,20 +1270,12 @@ function boot(){
     S.unlocked = true;
   }
   window.__pingu = {
-    S: S, goScene: goScene, trigger: triggerPhase, greet: greet, blow: blowCandles, egg: easterEgg,
-    // 给隔空手势模块复用的两个入口（等价于点击圆盘 / 右手滑动）
-    doAction: triggerPhase,
-    nextCharacter: function (d) { goScene(S.scene + (d || 1)); }
+    S: S, goScene: goScene, trigger: triggerPhase, greet: greet, blow: blowCandles, egg: easterEgg
   };
   requestAnimationFrame(loop);
 }
 
 function err(msg){
-  // 隔空手势模块的资源加载错误由模块自己提示，不再顶红条吓人
-  if (/hands_solution|createMediapipe|packed_assets|MediaPipe/i.test(msg)) {
-    console.warn("[gesture]", msg);
-    return;
-  }
   errbar.style.display = "block";
   errbar.textContent = "出错啦：" + msg;
 }
@@ -1291,6 +1286,5 @@ if (document.readyState === "loading") document.addEventListener("DOMContentLoad
 else boot();
 })();
 </script>
-<script>__GESTURE_JS__</script>
 </body>
 </html>

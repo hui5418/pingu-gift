@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-Pingu 的小世界 —— 本地服务器（默认 HTTPS，手机可以直接用摄像头/隔空手势）
+Pingu 的小世界 —— 本地服务器（默认 HTTPS，手机可以正常使用麦克风等需要安全环境的功能）
 双击 启动手机版.bat 即可；也可以手动运行：
 
     python serve.py                 # HTTPS，端口 8443（手机用这个）
@@ -144,7 +144,7 @@ def main():
         pair = ensure_cert(ip)
         if not pair:
             print("  ⚠️  没有找到 openssl，无法生成 HTTPS 证书。")
-            print("      改用普通 HTTP（手机上无法开启摄像头/隔空手势）。")
+            print("      改用普通 HTTP（手机上麦克风等功能会被浏览器限制）。")
             use_https = False
             scheme = "http"
             port = pick_port(8000)
@@ -166,7 +166,7 @@ def main():
         print("     点『高级』→『继续前往』即可（本地自签名证书，安全）")
         print("  手机和电脑要连同一个 WiFi；手机建议用 Chrome / Edge / Safari")
     else:
-        print("  普通 HTTP 模式：只有电脑 localhost 能用摄像头/隔空手势")
+        print("  普通 HTTP 模式：只有电脑 localhost 能用麦克风等敏感功能")
     print("  " + "-" * 50)
     print("  停止服务：按 Ctrl + C")
     print("")
