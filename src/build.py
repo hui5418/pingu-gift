@@ -19,7 +19,7 @@ def main():
     lunar = (HERE / "lunar.js").read_text(encoding="utf-8")
     tpl = tpl.replace("__LUNAR_JS__", lunar)
     for key, fn in IMAGES.items():
-        tpl = tpl.replace(key, "assets/" + fn)
+        tpl = tpl.replace(key, "assets/" + fn + "?v=6")
     for leftover in ("__IMG_", "__LUNAR_JS__", "__GESTURE_JS__"):
         if leftover in tpl:
             raise SystemExit("占位符没有替换完: " + leftover)
