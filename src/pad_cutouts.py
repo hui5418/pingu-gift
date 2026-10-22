@@ -1,9 +1,8 @@
 # -*- coding: utf-8 -*-
-"""生成网页用的图片资源（外置，避免把 2MB 图片塞进 HTML）。
+"""把 repair_cutouts.py 输出的透明 PNG 四周统一加 8% 留白，作为网页资源。
 
-从 src/cutouts/*.webp（透明抠图）出发：
-- 顶部和左右各加 8% 透明安全留白（防止部分手机浏览器裁掉图片最外圈）
-- 输出 assets/*.webp（质量 84，体积小、加载快）
+- 上下左右都留白（主体不贴画布边缘）
+- 输出 assets/*.png（透明 alpha 通道，不是 jpg）
 """
 import pathlib
 
@@ -21,13 +20,13 @@ def main():
     OUT.mkdir(exist_ok=True)
     total = 0
     for n in NAMES:
-        im = Image.open(SRC / (n + ".webp")).convert("RGBA")
+        im = Image.open(SRC / (n + ".png")).convert("RGBA")
         w, h = im.size
-        pad = max(4, round(h * PAD))
-        canvas = Image.new("RGBA", (w + pad * 2, h + pad), (0, 0, 0, 0))
+        pad = max(6, round(h * PAD))
+        canvas = Image.new("RGBA", (w + pad * 2, h + pad * 2), (0, 0, 0, 0))
         canvas.paste(im, (pad, pad), im)
-        out = OUT / (n + ".webp")
-        canvas.save(out, "WEBP", quality=84, method=6)
+        out = OUT / (n + ".png")
+        canvas.save(out, "PNG", optimize=True)
         kb = out.stat().st_size / 1024
         total += kb
         print(n, canvas.size, round(kb), "KB")

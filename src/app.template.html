@@ -9,11 +9,11 @@
 <meta name="theme-color" content="#ffd9a0">
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Ccircle cx='32' cy='32' r='30' fill='%23222631'/%3E%3Cellipse cx='32' cy='41' rx='16' ry='19' fill='%23fff3dc'/%3E%3Ccircle cx='24' cy='24' r='7' fill='%23fffdf8'/%3E%3Ccircle cx='40' cy='24' r='7' fill='%23fffdf8'/%3E%3Ccircle cx='24' cy='24' r='3' fill='%2314151c'/%3E%3Ccircle cx='40' cy='24' r='3' fill='%2314151c'/%3E%3Cpath d='M20 34 q12 -6 24 0 q-12 10 -24 0z' fill='%23ff9d2e'/%3E%3C/svg%3E">
 <title>Pingu 的小世界 · 给陈俊贤</title>
-<link rel="preload" as="image" href="assets/eat.webp">
-<link rel="preload" as="image" href="assets/study.webp">
-<link rel="preload" as="image" href="assets/sleep.webp">
-<link rel="preload" as="image" href="assets/play.webp">
-<link rel="preload" as="image" href="assets/birthday.webp">
+<link rel="preload" as="image" href="assets/eat.png">
+<link rel="preload" as="image" href="assets/study.png">
+<link rel="preload" as="image" href="assets/sleep.png">
+<link rel="preload" as="image" href="assets/play.png">
+<link rel="preload" as="image" href="assets/birthday.png">
 <style>
 /* ============ 基础 ============ */
 :root{
@@ -367,8 +367,9 @@ var LAYOUT = {
   birthday: { h:280, bottom:398, x:224 }
 };
 // 抠图上下/左右保留了 8% 透明安全边（防止部分手机浏览器裁掉图片边缘），
-// 图片实际高度 = 角色高度 × IMG_SCALE；脚仍对齐 LAYOUT.bottom。
-var IMG_SCALE = 670 / 620;
+// 图片上下左右各留 8% 透明边（主体不贴边）；脚底仍对齐 LAYOUT.bottom。
+var IMG_PAD = 0.08;
+var IMG_SCALE = 1 + IMG_PAD * 2;
 
 /* A/B 两段动作：keys 为累计时间（秒）的关键帧，pose 为舞台坐标下的位移/旋转/缩放 */
 function P(o){ return Object.assign({x:0,y:0,r:0,sx:1,sy:1}, o); }
@@ -623,7 +624,7 @@ function layoutPingu(){
   var unit = S.size.unit || 1;
   var img = imgs[S.scene];
   img.style.height = (L.h * IMG_SCALE * unit) + "px";
-  pinguWrap.style.bottom = ((460 - L.bottom) * unit) + "px";
+  pinguWrap.style.bottom = ((460 - L.bottom - L.h * IMG_PAD) * unit) + "px";
   pinguWrap.style.marginLeft = ((L.x - 200) * unit) + "px";
 }
 
